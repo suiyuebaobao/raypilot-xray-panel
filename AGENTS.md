@@ -143,6 +143,22 @@ Go 代码必须使用 `gofmt`。包名保持短小、全小写。测试命名优
 | 中心服务地址 | `[REDACTED]` |
 | NodeHost Token | `[REDACTED]` |
 
+**节点 3**
+
+| 项目 | 值 |
+|------|-----|
+| 节点 IP | `156.238.231.16` |
+| SSH 用户 | `root` |
+| SSH 密码 | `[REDACTED]` |
+| 系统 | Ubuntu 22.04 |
+| 角色 | 中转节点 |
+| relay 记录 | `52` |
+| node-agent | `raypilot-relay-agent` Docker 容器，`AGENT_ROLE=relay` |
+| 转发组件 | HAProxy 3.2.16 |
+| 监听端口 | `24443 -> 154.219.97.219:443` |
+| 中心服务地址 | `[REDACTED]` |
+| Relay Token | `[REDACTED]` |
+
 部署方式：一台多出口服务器只保留一个 multi_exit node-agent；旧 systemd/relay agent 不得与当前出口角色并存。
 
 ## 提交与 PR 要求
