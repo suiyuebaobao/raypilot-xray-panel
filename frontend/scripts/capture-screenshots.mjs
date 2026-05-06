@@ -449,6 +449,113 @@ const tokens = [
   },
 ]
 
+const runtimeLogLines = [
+  { line_number: 1, level: 'info', message: '2026-05-03T08:28:00Z api started on :3000', raw: '2026-05-03T08:28:00Z api started on :3000' },
+  { line_number: 2, level: 'info', message: '2026-05-03T08:29:10Z admin user demo_admin logged in from 198.51.100.10', raw: '2026-05-03T08:29:10Z admin user demo_admin logged in from 198.51.100.10' },
+  { line_number: 3, level: 'warn', message: '2026-05-03T08:29:40Z relay heartbeat delayed relay-hk.example.net', raw: '2026-05-03T08:29:40Z relay heartbeat delayed relay-hk.example.net' },
+  { line_number: 4, level: 'info', message: '2026-05-03T08:30:00Z deployment log center screenshot data loaded', raw: '2026-05-03T08:30:00Z deployment log center screenshot data loaded' },
+]
+
+const deploymentLogs = [
+  {
+    id: 1,
+    operator_user_id: 1,
+    operator_username: 'admin',
+    operator_ip: '198.51.100.10',
+    deploy_type: 'exit_deploy',
+    target_server_ip: '203.0.113.10',
+    target_role: 'exit',
+    result: 'success',
+    duration_ms: 42700,
+    node_id: 4,
+    node_ids: '[1,4]',
+    node_host_id: 2,
+    relay_id: null,
+    backend_ids: null,
+    error_detail: null,
+    created_at: iso('2026-05-03T08:24:00Z'),
+    steps: [
+      { id: 1, deployment_log_id: 1, step_order: 0, name: 'SSH 连接', status: 'success', message: '连接到 root@203.0.113.10:22' },
+      { id: 2, deployment_log_id: 1, step_order: 1, name: '创建节点', status: 'success', message: '已创建 TCP 与 XHTTP 逻辑节点' },
+      { id: 3, deployment_log_id: 1, step_order: 2, name: '同步用户', status: 'success', message: '已触发现有活跃订阅同步' },
+    ],
+  },
+  {
+    id: 2,
+    operator_user_id: 1,
+    operator_username: 'admin',
+    operator_ip: '198.51.100.10',
+    deploy_type: 'relay_deploy',
+    target_server_ip: '198.51.100.20',
+    target_role: 'relay',
+    result: 'success',
+    duration_ms: 31800,
+    node_id: null,
+    node_ids: null,
+    node_host_id: null,
+    relay_id: 1,
+    backend_ids: '[1,2]',
+    error_detail: null,
+    created_at: iso('2026-05-03T08:10:00Z'),
+    steps: [
+      { id: 4, deployment_log_id: 2, step_order: 0, name: '启动容器', status: 'success', message: 'relay agent 已启动' },
+      { id: 5, deployment_log_id: 2, step_order: 1, name: '绑定中转后端', status: 'success', message: '已保存 2 条后端绑定' },
+      { id: 6, deployment_log_id: 2, step_order: 2, name: '等待转发配置', status: 'success', message: 'HAProxy 配置已应用' },
+    ],
+  },
+]
+
+const operationLogs = [
+  {
+    id: 1,
+    actor_type: 'admin',
+    actor_user_id: 1,
+    actor_username: 'admin',
+    client_ip: '198.51.100.10',
+    forwarded_for: '198.51.100.10',
+    real_ip: '198.51.100.10',
+    user_agent: 'RayPilot Demo Browser',
+    action: 'admin_upsert_subscription',
+    target_type: 'user',
+    target_id: 2,
+    result: 'success',
+    summary: '管理员调整用户订阅',
+    created_at: iso('2026-05-03T08:29:00Z'),
+  },
+  {
+    id: 2,
+    actor_type: 'user',
+    actor_user_id: 2,
+    actor_username: 'demo_user',
+    client_ip: '203.0.113.55',
+    forwarded_for: '203.0.113.55',
+    real_ip: '203.0.113.55',
+    user_agent: 'mihomo/demo',
+    action: 'download_subscription',
+    target_type: 'subscription_token',
+    target_id: null,
+    result: 'success',
+    summary: '用户下载订阅',
+    created_at: iso('2026-05-03T08:20:00Z'),
+  },
+  {
+    id: 3,
+    actor_type: 'user',
+    actor_user_id: 2,
+    actor_username: 'demo_user',
+    client_ip: '203.0.113.55',
+    forwarded_for: '203.0.113.55',
+    real_ip: '203.0.113.55',
+    user_agent: 'RayPilot Demo Browser',
+    action: 'login',
+    target_type: 'user',
+    target_id: 2,
+    result: 'success',
+    summary: '用户登录成功',
+    created_at: iso('2026-05-03T08:00:00Z'),
+  },
+]
+
 const json = (data) => ({
   success: true,
   message: 'ok',
@@ -641,6 +748,15 @@ async function installDemoApi(page, persona = 'user') {
     if (pathname === '/api/admin/subscription-tokens') {
       return fulfillJson(route, paginated(tokens, 'tokens'))
     }
+    if (pathname === '/api/admin/logs/runtime') {
+      return fulfillJson(route, json({ source: url.searchParams.get('source') || 'api', lines: runtimeLogLines, count: runtimeLogLines.length }))
+    }
+    if (pathname === '/api/admin/logs/deployments') {
+      return fulfillJson(route, paginated(deploymentLogs, 'logs'))
+    }
+    if (pathname === '/api/admin/logs/operations') {
+      return fulfillJson(route, paginated(operationLogs, 'logs'))
+    }
 
     return fulfillJson(route, json({}))
   })
@@ -704,6 +820,7 @@ async function main() {
       ['admin-relays', '/admin/relays', '中转节点管理'],
       ['admin-users', '/admin/users', '用户管理'],
       ['admin-subscription-tokens', '/admin/subscription-tokens', '订阅 Token 管理'],
+      ['admin-logs', '/admin/logs', '日志中心'],
     ]
 
     for (const [name, url, expectedText] of adminPages) {
@@ -717,7 +834,7 @@ async function main() {
     await page.locator('.el-dialog input[type="password"]').fill('demo-password')
     await page.locator('.el-dialog .el-select').filter({ hasText: 'TCP + Reality' }).click()
     await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').filter({ hasText: 'XHTTP + Reality' }).click()
-    await page.locator('.el-dialog .el-switch').click()
+    await page.locator('.el-dialog .el-form-item').filter({ hasText: '多 IP 服务器' }).locator('.el-switch').click()
     await page.getByRole('button', { name: '扫描出口 IP' }).click()
     await page.getByText('203.0.113.11').waitFor({ state: 'visible', timeout: 30_000 })
     await page.locator('.scan-ip-table tbody .el-checkbox').nth(0).click()

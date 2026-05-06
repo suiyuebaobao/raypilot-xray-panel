@@ -46,6 +46,10 @@ English keywords: xray panel, xray-core panel, vless reality panel, vpn panel, p
 | --- | --- |
 | ![Subscription token management](assets/screenshots/admin-subscription-tokens.png) | ![User subscription](assets/screenshots/user-subscription.png) |
 
+| Log center | User plans |
+| --- | --- |
+| ![Admin log center](assets/screenshots/admin-logs.png) | ![User plans](assets/screenshots/user-plans.png) |
+
 ## Tech Stack
 
 | Layer | Stack |
