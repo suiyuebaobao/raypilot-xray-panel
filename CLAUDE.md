@@ -215,12 +215,15 @@ JWT 双 Token：
 | 系统 | Ubuntu 22.04, 2GB RAM, 30GB 磁盘 |
 | xray-core | v26.3.27（已安装） |
 | xray 配置 | `/usr/local/etc/xray/config.json` |
-| 协议 | VLESS + Reality + TCP，端口 443 |
+| 当前角色 | 中转节点物理机（原出口已停用） |
+| 协议 | VLESS + Reality + TCP，原端口 443 |
 | Reality SNI | `www.microsoft.com` |
 | Reality PublicKey | `Ptge2dO56Lr_sBjn1I05SVhxew3mq6tvGN5JxdG3Plg` |
-| node-agent | 已部署为 systemd 服务，10 秒心跳 |
+| node-agent | `raypilot-relay-agent` Docker 容器，`AGENT_ROLE=relay` |
+| relay 记录 | `55` |
+| 监听端口 | `24443 -> 156.238.231.16:443` |
 | 中心服务地址 | `[REDACTED]` |
-| Node Token | `[REDACTED]` |
+| Relay Token | `[REDACTED]` |
 
 **节点 2**
 
@@ -249,12 +252,14 @@ JWT 双 Token：
 | SSH 用户 | `root` |
 | SSH 密码 | `[REDACTED]` |
 | 系统 | Ubuntu 22.04 |
-| 角色 | 中转节点 |
-| relay 记录 | `52` |
-| node-agent | `raypilot-relay-agent` Docker 容器，`AGENT_ROLE=relay` |
-| 转发组件 | HAProxy 3.2.16 |
-| 监听端口 | `24443 -> 154.219.97.219:443` |
+| 角色 | 出口节点 |
+| 节点记录 | `105` |
+| node-agent | `raypilot-node-agent` Docker 容器，单出口模式 |
+| 转发组件 | Xray 26.3.27 |
+| 监听端口 | `443/TCP` |
+| Reality SNI | `www.microsoft.com` |
+| Reality PublicKey | `ZyjLrHt4dl3mig1vqxvFT6un5UL12gwZQhQbguIUm08` |
 | 中心服务地址 | `[REDACTED]` |
-| Relay Token | `[REDACTED]` |
+| Node Token | `[REDACTED]` |
 
 部署方式：一台多出口服务器只保留一个 multi_exit node-agent；旧 systemd/relay agent 不得与当前出口角色并存。
