@@ -1201,6 +1201,67 @@ func (r *NodeGroupRepository) BindNodes(ctx context.Context, groupID uint64, nod
 	return change, nil
 }
 
+// AddNodes 增量绑定节点到分组，返回新增节点 ID。
+func (r *NodeGroupRepository) AddNodes(ctx context.Context, groupID uint64, nodeIDs []uint64) (*NodeGroupNodeBindingChange, error) {
+	normalized, err := normalizeUint64IDs(nodeIDs)
+	if err != nil {
+		return nil, err
+	}
+	change := &NodeGroupNodeBindingChange{NodeIDs: normalized}
+	if len(normalized) == 0 {
+		return change, nil
+	}
+
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var groupCount int64
+		if err := tx.Model(&model.NodeGroup{}).Where("id = ?", groupID).Count(&groupCount).Error; err != nil {
+			return err
+		}
+		if groupCount == 0 {
+			return gorm.ErrRecordNotFound
+		}
+
+		var nodeCount int64
+		if err := tx.Model(&model.Node{}).Where("id IN ?", normalized).Count(&nodeCount).Error; err != nil {
+			return err
+		}
+		if nodeCount != int64(len(normalized)) {
+			return ErrInvalidNodeID
+		}
+
+		var existing []uint64
+		if err := tx.Table("node_group_nodes").
+			Where("node_group_id = ? AND node_id IN ?", groupID, normalized).
+			Pluck("node_id", &existing).Error; err != nil {
+			return err
+		}
+		existingSet := make(map[uint64]struct{}, len(existing))
+		for _, id := range existing {
+			existingSet[id] = struct{}{}
+		}
+
+		links := make([]model.NodeGroupNode, 0, len(normalized))
+		for _, nodeID := range normalized {
+			if _, ok := existingSet[nodeID]; ok {
+				continue
+			}
+			change.AddedNodeIDs = append(change.AddedNodeIDs, nodeID)
+			links = append(links, model.NodeGroupNode{NodeID: nodeID, NodeGroupID: groupID})
+		}
+		if len(links) == 0 {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "node_id"}, {Name: "node_group_id"}},
+			DoNothing: true,
+		}).Create(&links).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return change, nil
+}
+
 func normalizeUint64IDs(ids []uint64) ([]uint64, error) {
 	seen := make(map[uint64]struct{}, len(ids))
 	normalized := make([]uint64, 0, len(ids))
@@ -1317,6 +1378,85 @@ func (r *NodeRepository) BelongsToNodeHost(ctx context.Context, nodeID uint64, n
 // Update 更新节点。
 func (r *NodeRepository) Update(ctx context.Context, node *model.Node) error {
 	return r.db.WithContext(ctx).Save(node).Error
+}
+
+// DisableByHost 停用指定 host 的出口节点记录，返回受影响节点及其所属分组。
+func (r *NodeRepository) DisableByHost(ctx context.Context, host string) ([]model.Node, map[uint64][]uint64, error) {
+	return r.DisableByHostExcept(ctx, host, nil)
+}
+
+// DisableByAgentBaseURL 停用同一物理服务器上的旧出口节点记录。
+func (r *NodeRepository) DisableByAgentBaseURL(ctx context.Context, agentBaseURL string, excludeIDs []uint64) ([]model.Node, map[uint64][]uint64, error) {
+	return r.disableByQuery(ctx, func(tx *gorm.DB) *gorm.DB {
+		return tx.Where("agent_base_url = ? AND is_enabled = ?", strings.TrimSpace(agentBaseURL), true)
+	}, excludeIDs)
+}
+
+// DisableByHostExcept 停用指定 host 的旧出口节点记录，排除本次新创建的节点。
+func (r *NodeRepository) DisableByHostExcept(ctx context.Context, host string, excludeIDs []uint64) ([]model.Node, map[uint64][]uint64, error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return nil, map[uint64][]uint64{}, nil
+	}
+	return r.disableByQuery(ctx, func(tx *gorm.DB) *gorm.DB {
+		return tx.Where("host = ? AND is_enabled = ?", host, true)
+	}, excludeIDs)
+}
+
+func (r *NodeRepository) disableByQuery(ctx context.Context, buildQuery func(*gorm.DB) *gorm.DB, excludeIDs []uint64) ([]model.Node, map[uint64][]uint64, error) {
+	excludeSet := map[uint64]struct{}{}
+	for _, id := range excludeIDs {
+		if id != 0 {
+			excludeSet[id] = struct{}{}
+		}
+	}
+
+	var nodes []model.Node
+	groupIDsByNode := map[uint64][]uint64{}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		query := buildQuery(tx)
+		if len(excludeSet) > 0 {
+			excluded := make([]uint64, 0, len(excludeSet))
+			for id := range excludeSet {
+				excluded = append(excluded, id)
+			}
+			query = query.Where("id NOT IN ?", excluded)
+		}
+		if err := query.Find(&nodes).Error; err != nil {
+			return err
+		}
+		if len(nodes) == 0 {
+			return nil
+		}
+		nodeIDs := make([]uint64, 0, len(nodes))
+		for _, node := range nodes {
+			nodeIDs = append(nodeIDs, node.ID)
+			if node.NodeGroupID != nil {
+				groupIDsByNode[node.ID] = append(groupIDsByNode[node.ID], *node.NodeGroupID)
+			}
+		}
+		if tx.Migrator().HasTable(&model.NodeGroupNode{}) {
+			var links []model.NodeGroupNode
+			if err := tx.Where("node_id IN ?", nodeIDs).Find(&links).Error; err != nil {
+				return err
+			}
+			for _, link := range links {
+				groupIDsByNode[link.NodeID] = append(groupIDsByNode[link.NodeID], link.NodeGroupID)
+			}
+		}
+		if err := tx.Model(&model.Node{}).Where("id IN ?", nodeIDs).Update("is_enabled", false).Error; err != nil {
+			return err
+		}
+		for nodeID, ids := range groupIDsByNode {
+			normalized, err := normalizeUint64IDs(ids)
+			if err != nil {
+				return err
+			}
+			groupIDsByNode[nodeID] = normalized
+		}
+		return nil
+	})
+	return nodes, groupIDsByNode, err
 }
 
 // Delete 删除节点。
@@ -1470,6 +1610,49 @@ func (r *RelayRepository) FindByID(ctx context.Context, id uint64) (*model.Relay
 // Update 更新中转节点。
 func (r *RelayRepository) Update(ctx context.Context, relay *model.Relay) error {
 	return r.db.WithContext(ctx).Save(relay).Error
+}
+
+// DisableByHost 停用指定 host 的中转节点记录，避免订阅继续下发旧入口。
+func (r *RelayRepository) DisableByHost(ctx context.Context, host string) ([]model.Relay, error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return []model.Relay{}, nil
+	}
+	return r.disableByQuery(ctx, func(tx *gorm.DB) *gorm.DB {
+		return tx.Where("host = ? AND is_enabled = ?", host, true)
+	})
+}
+
+// DisableByAgentBaseURL 停用同一物理服务器上的旧中转记录。
+func (r *RelayRepository) DisableByAgentBaseURL(ctx context.Context, agentBaseURL string) ([]model.Relay, error) {
+	agentBaseURL = strings.TrimSpace(agentBaseURL)
+	if agentBaseURL == "" {
+		return []model.Relay{}, nil
+	}
+	return r.disableByQuery(ctx, func(tx *gorm.DB) *gorm.DB {
+		return tx.Where("agent_base_url = ? AND is_enabled = ?", agentBaseURL, true)
+	})
+}
+
+func (r *RelayRepository) disableByQuery(ctx context.Context, buildQuery func(*gorm.DB) *gorm.DB) ([]model.Relay, error) {
+	var relays []model.Relay
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := buildQuery(tx).Find(&relays).Error; err != nil {
+			return err
+		}
+		if len(relays) == 0 {
+			return nil
+		}
+		ids := make([]uint64, 0, len(relays))
+		for _, relay := range relays {
+			ids = append(ids, relay.ID)
+		}
+		return tx.Model(&model.Relay{}).Where("id IN ?", ids).Updates(map[string]interface{}{
+			"is_enabled": false,
+			"status":     "offline",
+		}).Error
+	})
+	return relays, err
 }
 
 // Delete 删除中转节点。存在启用后端时拒绝删除，避免留下仍在订阅中可见的入口。
@@ -1664,6 +1847,28 @@ func (r *RelayConfigTaskRepository) MarkFailed(ctx context.Context, taskID uint6
 			"executed_at": executedAt,
 			"retry_count": gorm.Expr("retry_count + 1"),
 		}).Error
+}
+
+// LatestStatusByRelayAndAction 查询指定时间之后最新配置任务是否完成。
+func (r *RelayConfigTaskRepository) LatestStatusByRelayAndAction(ctx context.Context, relayID uint64, action string, since time.Time) (bool, string, error) {
+	var task model.RelayConfigTask
+	err := r.db.WithContext(ctx).
+		Where("relay_id = ? AND action = ? AND scheduled_at >= ?", relayID, action, since).
+		Order("scheduled_at DESC, id DESC").
+		First(&task).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, "", nil
+	}
+	if err != nil {
+		return false, "", err
+	}
+	if task.Status == "DONE" {
+		return true, "", nil
+	}
+	if task.Status == "FAILED" && task.LastError != nil && *task.LastError != "" {
+		return false, *task.LastError, nil
+	}
+	return false, "", nil
 }
 
 // RetryFailedAndStaleTasks 将失败任务和超时锁定的中转配置任务重新排队。

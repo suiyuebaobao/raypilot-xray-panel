@@ -159,6 +159,18 @@
         <el-form-item label="节点 Token">
           <el-input v-model="deployForm.node_token" placeholder="留空自动生成" />
         </el-form-item>
+        <el-form-item label="节点分组">
+          <el-select v-model="deployForm.node_group_ids" multiple filterable placeholder="部署成功后自动加入分组" style="width: 100%">
+            <el-option v-for="group in nodeGroups" :key="group.id" :label="group.name" :value="group.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="替换旧角色">
+          <el-switch
+            v-model="deployForm.replace_existing_role"
+            active-text="自动停用同服务器旧出口/中转"
+            inactive-text="保留旧记录"
+          />
+        </el-form-item>
         <el-form-item label="传输模式">
           <el-select v-model="deployForm.transports" multiple :multiple-limit="2" style="width: 100%" @change="handleTransportSelectionChange(deployForm)">
             <el-option label="TCP + Reality" value="tcp" />
@@ -252,6 +264,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheck, CircleClose, Loading } from '@element-plus/icons-vue'
 
 const nodes = ref([])
+const nodeGroups = ref([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -325,6 +338,8 @@ const deployForm = reactive({
   xhttp_host: '',
   xhttp_mode: 'auto',
   multi_ip_enabled: false,
+  node_group_ids: [],
+  replace_existing_role: true,
 })
 
 const deployRules = {
@@ -340,6 +355,7 @@ function showDeployDialog() {
   selectedDeployIps.value = []
   handleTransportSelectionChange(deployForm)
   deployDialogVisible.value = true
+  fetchNodeGroups()
 }
 
 function handleMultiIpModeChange() {
@@ -419,6 +435,8 @@ async function handleDeploy() {
       xhttp_mode: deployForm.xhttp_mode,
       multi_ip_enabled: deployForm.multi_ip_enabled,
       selected_ips: selectedDeployIps.value.map((item) => item.ip),
+      node_group_ids: deployForm.node_group_ids,
+      replace_existing_role: deployForm.replace_existing_role,
     }
 
     const res = await adminApi.nodes.deploy(payload)
@@ -687,8 +705,18 @@ async function fetchNodes() {
   }
 }
 
+async function fetchNodeGroups() {
+  try {
+    const res = await adminApi.nodeGroups.list()
+    nodeGroups.value = res.data.groups || res.data.node_groups || []
+  } catch (err) {
+    ElMessage.error('获取节点分组失败')
+  }
+}
+
 onMounted(() => {
   fetchNodes()
+  fetchNodeGroups()
 })
 </script>
 

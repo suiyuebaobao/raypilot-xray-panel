@@ -83,7 +83,7 @@ test('admin and user pages render against live API', async ({ page }) => {
   const deployDialog = page.locator('.el-dialog').filter({ hasText: '一键部署节点' })
   await expect(deployDialog.getByText('多 IP 服务器')).toBeVisible()
   await expect(deployDialog.getByRole('button', { name: '扫描出口 IP' })).toHaveCount(0)
-  await deployDialog.locator('.el-switch').click()
+  await deployDialog.getByText('多 IP 服务器').locator('..').locator('.el-switch').click()
   await expect(deployDialog.getByRole('button', { name: '扫描出口 IP' })).toBeVisible()
   await deployDialog.getByRole('button', { name: '取消' }).click()
 
@@ -91,6 +91,12 @@ test('admin and user pages render against live API', async ({ page }) => {
   await page.waitForLoadState('networkidle')
   await expect(page.getByRole('button', { name: '一键部署中转' })).toBeVisible()
   await expect(page.getByText('管理后端').first()).toBeVisible()
+  await page.getByRole('button', { name: '一键部署中转' }).click()
+  const relayDeployDialog = page.locator('.el-dialog').filter({ hasText: '一键部署中转节点' })
+  await expect(relayDeployDialog.locator('.el-form-item').filter({ hasText: '出口节点' })).toBeVisible()
+  await expect(relayDeployDialog.locator('.el-form-item').filter({ hasText: '监听端口' })).toBeVisible()
+  await expect(relayDeployDialog.locator('.el-form-item').filter({ hasText: '替换旧角色' })).toBeVisible()
+  await relayDeployDialog.getByRole('button', { name: '取消' }).click()
 
   await page.goto('/admin/subscription-tokens')
   await page.waitForLoadState('networkidle')

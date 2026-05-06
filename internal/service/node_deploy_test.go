@@ -80,3 +80,16 @@ func TestNormalizeDeployTransportOptions_RejectsDuplicatePorts(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "不能使用同一个端口")
 }
+
+func TestNormalizeDeployUint64IDs_DedupesAndSorts(t *testing.T) {
+	ids, err := normalizeDeployUint64IDs([]uint64{3, 1, 3, 2})
+
+	require.NoError(t, err)
+	require.Equal(t, []uint64{1, 2, 3}, ids)
+}
+
+func TestNormalizeDeployUint64IDs_RejectsZero(t *testing.T) {
+	_, err := normalizeDeployUint64IDs([]uint64{1, 0})
+
+	require.Error(t, err)
+}

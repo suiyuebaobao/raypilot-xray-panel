@@ -29,8 +29,11 @@ import (
 
 // NodeDeployService 节点部署服务。
 type NodeDeployService struct {
-	nodeRepo     *repository.NodeRepository
-	nodeHostRepo *repository.NodeHostRepository
+	nodeRepo      *repository.NodeRepository
+	nodeHostRepo  *repository.NodeHostRepository
+	nodeGroupRepo *repository.NodeGroupRepository
+	relayRepo     *repository.RelayRepository
+	nodeAccessSvc *NodeAccessService
 }
 
 // NewNodeDeployService 创建节点部署服务。
@@ -42,24 +45,43 @@ func NewNodeDeployService(nodeRepo *repository.NodeRepository, nodeHostRepo ...*
 	return &NodeDeployService{nodeRepo: nodeRepo, nodeHostRepo: hostRepo}
 }
 
+// NewNodeDeployServiceWithAutomation 创建带分组绑定、旧角色停用和用户同步能力的节点部署服务。
+func NewNodeDeployServiceWithAutomation(
+	nodeRepo *repository.NodeRepository,
+	nodeHostRepo *repository.NodeHostRepository,
+	nodeGroupRepo *repository.NodeGroupRepository,
+	relayRepo *repository.RelayRepository,
+	nodeAccessSvc *NodeAccessService,
+) *NodeDeployService {
+	return &NodeDeployService{
+		nodeRepo:      nodeRepo,
+		nodeHostRepo:  nodeHostRepo,
+		nodeGroupRepo: nodeGroupRepo,
+		relayRepo:     relayRepo,
+		nodeAccessSvc: nodeAccessSvc,
+	}
+}
+
 // DeployRequest 一键部署请求。
 type DeployRequest struct {
-	SSHHost        string   `json:"ssh_host" binding:"required"`
-	SSHPort        int      `json:"ssh_port"`
-	SSHUser        string   `json:"ssh_user" binding:"required"`
-	SSHPassword    string   `json:"ssh_password" binding:"required"`
-	CenterURL      string   `json:"center_url" binding:"required"`
-	NodeToken      string   `json:"node_token"`
-	NodeName       string   `json:"node_name"`
-	Transport      string   `json:"transport"`
-	Transports     []string `json:"transports"`
-	TCPPort        uint32   `json:"tcp_port"`
-	XHTTPPort      uint32   `json:"xhttp_port"`
-	XHTTPPath      string   `json:"xhttp_path"`
-	XHTTPHost      string   `json:"xhttp_host"`
-	XHTTPMode      string   `json:"xhttp_mode"`
-	MultiIPEnabled bool     `json:"multi_ip_enabled"`
-	SelectedIPs    []string `json:"selected_ips"`
+	SSHHost             string   `json:"ssh_host" binding:"required"`
+	SSHPort             int      `json:"ssh_port"`
+	SSHUser             string   `json:"ssh_user" binding:"required"`
+	SSHPassword         string   `json:"ssh_password" binding:"required"`
+	CenterURL           string   `json:"center_url" binding:"required"`
+	NodeToken           string   `json:"node_token"`
+	NodeName            string   `json:"node_name"`
+	Transport           string   `json:"transport"`
+	Transports          []string `json:"transports"`
+	TCPPort             uint32   `json:"tcp_port"`
+	XHTTPPort           uint32   `json:"xhttp_port"`
+	XHTTPPath           string   `json:"xhttp_path"`
+	XHTTPHost           string   `json:"xhttp_host"`
+	XHTTPMode           string   `json:"xhttp_mode"`
+	MultiIPEnabled      bool     `json:"multi_ip_enabled"`
+	SelectedIPs         []string `json:"selected_ips"`
+	NodeGroupIDs        []uint64 `json:"node_group_ids"`
+	ReplaceExistingRole bool     `json:"replace_existing_role"`
 }
 
 // DeployResult 部署结果。
@@ -405,6 +427,10 @@ func (s *NodeDeployService) Deploy(ctx context.Context, req *DeployRequest) (*De
 	}
 	addStep("同步 Reality 参数", "success", "已写回 SNI、公钥和 Short ID")
 
+	if err := s.finalizeExitDeploy(ctx, req, []uint64{node.ID}, addStep); err != nil {
+		return fail("部署后自动配置失败: %w", err)
+	}
+
 	result.NodeID = node.ID
 	result.Success = true
 	result.Message = "部署成功"
@@ -661,6 +687,10 @@ func (s *NodeDeployService) deployMultiLine(ctx context.Context, req *DeployRequ
 	}
 	addStep("同步 Reality 参数", "success", "已写回所有逻辑节点的 SNI、公钥和 Short ID")
 
+	if err := s.finalizeExitDeploy(ctx, req, createdNodeIDs, addStep); err != nil {
+		return fail("部署后自动配置失败: %w", err)
+	}
+
 	result.NodeHostID = nodeHost.ID
 	result.NodeIDs = createdNodeIDs
 	result.Success = true
@@ -702,6 +732,94 @@ func deployLogicalNodeName(base string, ip string, ipIndex int, ipCount int, opt
 		return fmt.Sprintf("%s-%s", base, transportLabel)
 	}
 	return base
+}
+
+func (s *NodeDeployService) finalizeExitDeploy(ctx context.Context, req *DeployRequest, nodeIDs []uint64, addStep func(name, status, msg string)) error {
+	nodeIDs = uniqueDeployUint64s(nodeIDs)
+	if len(nodeIDs) == 0 {
+		return nil
+	}
+
+	if req.ReplaceExistingRole {
+		agentBaseURL := fmt.Sprintf("http://%s:8080", req.SSHHost)
+		if s.relayRepo != nil {
+			addStep("停用旧中转角色", "running", "停用同服务器旧中转记录，避免订阅下发错误入口")
+			relays, err := s.relayRepo.DisableByAgentBaseURL(ctx, agentBaseURL)
+			if err != nil {
+				addStep("停用旧中转角色", "failed", err.Error())
+				return err
+			}
+			addStep("停用旧中转角色", "success", fmt.Sprintf("已停用 %d 条旧中转记录", len(relays)))
+		}
+		if s.nodeRepo != nil && s.nodeAccessSvc != nil {
+			addStep("停用旧出口角色", "running", "停用同服务器旧出口记录并下发禁用任务")
+			oldNodes, groupIDsByNode, err := s.nodeRepo.DisableByAgentBaseURL(ctx, agentBaseURL, nodeIDs)
+			if err != nil {
+				addStep("停用旧出口角色", "failed", err.Error())
+				return err
+			}
+			for _, oldNode := range oldNodes {
+				if err := s.nodeAccessSvc.TriggerForNodeGroups(ctx, oldNode.ID, groupIDsByNode[oldNode.ID], "DISABLE_USER"); err != nil {
+					addStep("停用旧出口角色", "failed", err.Error())
+					return err
+				}
+			}
+			addStep("停用旧出口角色", "success", fmt.Sprintf("已停用 %d 条旧出口记录", len(oldNodes)))
+		}
+	}
+
+	if len(req.NodeGroupIDs) == 0 {
+		return nil
+	}
+	if s.nodeGroupRepo == nil {
+		return fmt.Errorf("node group repository is not configured")
+	}
+
+	groupIDs, err := normalizeDeployUint64IDs(req.NodeGroupIDs)
+	if err != nil {
+		return err
+	}
+	for _, groupID := range groupIDs {
+		addStep("绑定节点分组", "running", fmt.Sprintf("绑定节点到分组 %d", groupID))
+		change, err := s.nodeGroupRepo.AddNodes(ctx, groupID, nodeIDs)
+		if err != nil {
+			addStep("绑定节点分组", "failed", err.Error())
+			return err
+		}
+		if s.nodeAccessSvc != nil && len(change.AddedNodeIDs) > 0 {
+			if err := s.nodeAccessSvc.TriggerForNodeGroupNodes(ctx, groupID, change.AddedNodeIDs, "UPSERT_USER"); err != nil {
+				addStep("绑定节点分组", "failed", err.Error())
+				return err
+			}
+		}
+		addStep("绑定节点分组", "success", fmt.Sprintf("分组 %d 新增绑定 %d 条节点", groupID, len(change.AddedNodeIDs)))
+	}
+	return nil
+}
+
+func normalizeDeployUint64IDs(values []uint64) ([]uint64, error) {
+	seen := map[uint64]struct{}{}
+	result := make([]uint64, 0, len(values))
+	for _, value := range values {
+		if value == 0 {
+			return nil, fmt.Errorf("id must be greater than 0")
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	return result, nil
+}
+
+func uniqueDeployUint64s(values []uint64) []uint64 {
+	normalized, err := normalizeDeployUint64IDs(values)
+	if err != nil {
+		return []uint64{}
+	}
+	return normalized
 }
 
 func (s *NodeDeployService) checkDocker(client *ssh.Client) (bool, error) {

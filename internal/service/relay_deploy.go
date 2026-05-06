@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -17,7 +18,10 @@ import (
 
 // RelayDeployService 中转节点一键部署服务。
 type RelayDeployService struct {
-	relayRepo *repository.RelayRepository
+	relayRepo     *repository.RelayRepository
+	relaySvc      *RelayService
+	nodeRepo      *repository.NodeRepository
+	nodeAccessSvc *NodeAccessService
 }
 
 // NewRelayDeployService 创建中转节点部署服务。
@@ -25,25 +29,36 @@ func NewRelayDeployService(relayRepo *repository.RelayRepository) *RelayDeploySe
 	return &RelayDeployService{relayRepo: relayRepo}
 }
 
+// NewRelayDeployServiceWithAutomation 创建带后端绑定、旧出口停用和 reload 验证的一键中转部署服务。
+func NewRelayDeployServiceWithAutomation(relayRepo *repository.RelayRepository, relaySvc *RelayService, nodeRepo *repository.NodeRepository, nodeAccessSvc *NodeAccessService) *RelayDeployService {
+	return &RelayDeployService{relayRepo: relayRepo, relaySvc: relaySvc, nodeRepo: nodeRepo, nodeAccessSvc: nodeAccessSvc}
+}
+
 // RelayDeployRequest 一键部署中转节点请求。
 type RelayDeployRequest struct {
-	SSHHost       string `json:"ssh_host" binding:"required"`
-	SSHPort       int    `json:"ssh_port"`
-	SSHUser       string `json:"ssh_user" binding:"required"`
-	SSHPassword   string `json:"ssh_password" binding:"required"`
-	CenterURL     string `json:"center_url" binding:"required"`
-	RelayToken    string `json:"relay_token"`
-	RelayName     string `json:"relay_name"`
-	ForwarderType string `json:"forwarder_type"`
+	SSHHost             string `json:"ssh_host" binding:"required"`
+	SSHPort             int    `json:"ssh_port"`
+	SSHUser             string `json:"ssh_user" binding:"required"`
+	SSHPassword         string `json:"ssh_password" binding:"required"`
+	CenterURL           string `json:"center_url" binding:"required"`
+	RelayToken          string `json:"relay_token"`
+	RelayName           string `json:"relay_name"`
+	ForwarderType       string `json:"forwarder_type"`
+	ExitNodeID          uint64 `json:"exit_node_id"`
+	ListenPort          uint32 `json:"listen_port"`
+	TargetPort          uint32 `json:"target_port"`
+	BackendName         string `json:"backend_name"`
+	ReplaceExistingRole bool   `json:"replace_existing_role"`
 }
 
 // RelayDeployResult 中转节点部署结果。
 type RelayDeployResult struct {
-	RelayID    uint64 `json:"relay_id"`
-	RelayToken string `json:"relay_token,omitempty"`
-	Success    bool   `json:"success"`
-	Message    string `json:"message"`
-	Steps      []Step `json:"steps"`
+	RelayID    uint64   `json:"relay_id"`
+	BackendIDs []uint64 `json:"backend_ids,omitempty"`
+	RelayToken string   `json:"relay_token,omitempty"`
+	Success    bool     `json:"success"`
+	Message    string   `json:"message"`
+	Steps      []Step   `json:"steps"`
 }
 
 // Deploy 一键部署中转节点。
@@ -173,7 +188,14 @@ func (s *RelayDeployService) Deploy(ctx context.Context, req *RelayDeployRequest
 	}
 	addStep("等待心跳", "success", "中转 agent 已回连")
 
+	backendIDs, err := s.finalizeRelayDeploy(ctx, req, relay.ID, addStep)
+	if err != nil {
+		addStep("部署后自动配置", "failed", err.Error())
+		return fail("部署后自动配置失败: %w", err)
+	}
+
 	result.RelayID = relay.ID
+	result.BackendIDs = backendIDs
 	result.Success = true
 	result.Message = "部署成功"
 	log.Printf("[relay-deploy] relay %s deployed successfully on %s, relay_id=%d", relayName, req.SSHHost, relay.ID)
@@ -214,6 +236,94 @@ func startRelayContainer(client *ssh.Client, centerURL string, relayID uint64, r
 		return fmt.Errorf("relay container not running after start")
 	}
 	return nil
+}
+
+func (s *RelayDeployService) finalizeRelayDeploy(ctx context.Context, req *RelayDeployRequest, relayID uint64, addStep func(name, status, msg string)) ([]uint64, error) {
+	if req.ReplaceExistingRole && s.nodeRepo != nil && s.nodeAccessSvc != nil {
+		agentBaseURL := fmt.Sprintf("http://%s:8080", req.SSHHost)
+		addStep("停用旧出口角色", "running", "停用同服务器旧出口节点并下发禁用任务")
+		oldNodes, groupIDsByNode, err := s.nodeRepo.DisableByAgentBaseURL(ctx, agentBaseURL, nil)
+		if err != nil {
+			addStep("停用旧出口角色", "failed", err.Error())
+			return nil, err
+		}
+		for _, oldNode := range oldNodes {
+			if err := s.nodeAccessSvc.TriggerForNodeGroups(ctx, oldNode.ID, groupIDsByNode[oldNode.ID], "DISABLE_USER"); err != nil {
+				addStep("停用旧出口角色", "failed", err.Error())
+				return nil, err
+			}
+		}
+		addStep("停用旧出口角色", "success", fmt.Sprintf("已停用 %d 条旧出口记录", len(oldNodes)))
+	}
+
+	if req.ExitNodeID == 0 {
+		return nil, nil
+	}
+	if s.relaySvc == nil {
+		return nil, fmt.Errorf("relay service is not configured")
+	}
+	listenPort := req.ListenPort
+	if listenPort == 0 {
+		listenPort = 24443
+	}
+	targetPort := req.TargetPort
+	if targetPort == 0 && s.nodeRepo != nil {
+		exitNode, err := s.nodeRepo.FindByID(ctx, req.ExitNodeID)
+		if err != nil {
+			return nil, fmt.Errorf("find exit node %d: %w", req.ExitNodeID, err)
+		}
+		targetPort = exitNode.Port
+	}
+	if targetPort == 0 {
+		targetPort = 443
+	}
+
+	addStep("绑定中转后端", "running", fmt.Sprintf("绑定 %d -> 出口节点 %d:%d", listenPort, req.ExitNodeID, targetPort))
+	backends, err := s.relaySvc.SaveBackends(ctx, relayID, []model.RelayBackendRequest{{
+		ExitNodeID: req.ExitNodeID,
+		Name:       strings.TrimSpace(req.BackendName),
+		ListenPort: listenPort,
+		TargetPort: targetPort,
+		IsEnabled:  true,
+	}})
+	if err != nil {
+		addStep("绑定中转后端", "failed", err.Error())
+		return nil, err
+	}
+	backendIDs := make([]uint64, 0, len(backends))
+	for _, backend := range backends {
+		backendIDs = append(backendIDs, backend.ID)
+	}
+	addStep("绑定中转后端", "success", fmt.Sprintf("已保存 %d 条后端绑定", len(backends)))
+
+	addStep("等待转发配置", "running", "等待 relay agent 应用 HAProxy 配置")
+	if err := s.waitRelayReloadDone(ctx, relayID, time.Now().Add(-5*time.Second), 45*time.Second); err != nil {
+		addStep("等待转发配置", "failed", err.Error())
+		return backendIDs, err
+	}
+	addStep("等待转发配置", "success", "HAProxy 配置已应用")
+	return backendIDs, nil
+}
+
+func (s *RelayDeployService) waitRelayReloadDone(ctx context.Context, relayID uint64, startedAt time.Time, timeout time.Duration) error {
+	if s.relaySvc == nil || s.relaySvc.taskRepo == nil {
+		return nil
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		done, lastErr, err := s.relaySvc.taskRepo.LatestStatusByRelayAndAction(ctx, relayID, "RELOAD_CONFIG", startedAt)
+		if err != nil {
+			return err
+		}
+		if done {
+			return nil
+		}
+		if lastErr != "" {
+			return errors.New(lastErr)
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("timeout waiting relay reload")
 }
 
 func (s *RelayDeployService) waitRelayHeartbeat(ctx context.Context, relayID uint64, startedAt time.Time, timeout time.Duration) error {

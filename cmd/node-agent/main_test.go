@@ -3,14 +3,20 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
+}
 
 func TestBuildHAProxyConfig_IncludesStatsSocketAndRelayBackend(t *testing.T) {
 	config, enabledCount, err := buildHAProxyConfig([]RelayBackendPayload{
@@ -257,7 +263,7 @@ func TestXrayStatValueUnmarshal_AcceptsNumberAndString(t *testing.T) {
 
 func TestTrafficQueueFlush_MultiExitReportsNodeIDToMultiEndpoint(t *testing.T) {
 	var received []MultiTrafficReportReq
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	httpClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Path != "/api/agent/multi/traffic" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -266,14 +272,16 @@ func TestTrafficQueueFlush_MultiExitReportsNodeIDToMultiEndpoint(t *testing.T) {
 			t.Fatalf("decode request: %v", err)
 		}
 		received = append(received, req)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
-	}))
-	defer server.Close()
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}
 
 	queuePath := filepath.Join(t.TempDir(), "multi_traffic_queue.json")
 	agent := NewAgent(&Config{
-		CenterServerURL:   server.URL,
+		CenterServerURL:   "http://center.test",
 		AgentRole:         "multi_exit",
 		NodeHostID:        9,
 		NodeHostToken:     "host-token",
@@ -281,6 +289,7 @@ func TestTrafficQueueFlush_MultiExitReportsNodeIDToMultiEndpoint(t *testing.T) {
 		TrafficQueuePath:  queuePath,
 		TrafficQueueLimit: 10,
 	})
+	agent.httpClient = httpClient
 
 	collectedAt := time.Now().UTC().Truncate(time.Second)
 	agent.enqueueTrafficReport(TrafficReportBatch{
@@ -311,7 +320,7 @@ func TestTrafficQueueFlush_MultiExitReportsNodeIDToMultiEndpoint(t *testing.T) {
 func TestTrafficQueueFlush_ReplaysOldestFirstAndKeepsFailedBatch(t *testing.T) {
 	var received []TrafficReportReq
 	failFirst := true
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	httpClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Path != "/api/agent/traffic" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -322,23 +331,29 @@ func TestTrafficQueueFlush_ReplaysOldestFirstAndKeepsFailedBatch(t *testing.T) {
 		received = append(received, req)
 		if failFirst {
 			failFirst = false
-			http.Error(w, "temporary failure", http.StatusBadGateway)
-			return
+			return &http.Response{
+				StatusCode: http.StatusBadGateway,
+				Body:       io.NopCloser(strings.NewReader(`temporary failure`)),
+				Header:     make(http.Header),
+			}, nil
 		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
-	}))
-	defer server.Close()
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}
 
 	queuePath := filepath.Join(t.TempDir(), "traffic_queue.json")
 	agent := NewAgent(&Config{
-		CenterServerURL:   server.URL,
+		CenterServerURL:   "http://center.test",
 		NodeID:            7,
 		NodeToken:         "node-token",
 		XrayConfigPath:    filepath.Join(t.TempDir(), "config.json"),
 		TrafficQueuePath:  queuePath,
 		TrafficQueueLimit: 10,
 	})
+	agent.httpClient = httpClient
 
 	firstAt := time.Now().Add(-2 * time.Minute).UTC().Truncate(time.Second)
 	secondAt := firstAt.Add(time.Minute)

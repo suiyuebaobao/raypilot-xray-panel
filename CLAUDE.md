@@ -162,6 +162,7 @@ JWT 双 Token：
 - multi_exit 生成的 Xray 配置必须为每个逻辑节点创建独立 inbound/outbound：`listen` 绑定该节点 IP，`freedom.sendThrough` 也绑定同一 IP，避免双 IP 服务器出站归属漂移。
 - multi_exit 对中心仍必须按 `node_id` 分别心跳、领取任务、上报任务结果和用户级流量；中心账本、套餐授权和订阅生成继续以 `nodes.id` 为归属。
 - multi_exit 写入 Xray clients 时必须使用节点内部分隔的统计 email，避免同一用户跨多个逻辑节点的 Xray Stats 累计值混在一起；上报中心前再还原为原始 `xray_user_key`。
+- 出口节点一键部署必须是真一键：部署成功后自动绑定管理员选择的节点分组、触发已有活跃订阅用户同步；选择替换旧角色时必须自动停用同服务器旧 relay 和旧出口记录，不能依赖人工再去后台补分组或停旧线路。
 - 修改多 IP 扫描、`node_hosts`、multi_exit 协议、Xray 多 inbound/outbound 模板或流量归属逻辑时，必须同步更新 `开发方案.md`、节点代理部署指南、管理接口文档和规则文件，并运行 `go test ./...`、前端构建和 Playwright smoke。
 
 ### 直连与中转演进规则
@@ -177,6 +178,7 @@ JWT 双 Token：
 - `RELAY_TOKEN` 只用于中转节点 agent 鉴权，不能用于下载订阅、访问出口节点任务、上报用户级流量或修改 Xray clients。
 - node-agent relay 模式通过 HAProxy stats socket 只能上报中转节点、监听端口、后端绑定维度的线路级指标；用户套餐扣量和封禁仍以出口节点按 UUID 上报的数据为准。
 - 中转转发组件第一版固定默认 HAProxy；node-agent relay 模式必须先执行 `haproxy -c` 校验，成功后再 reload，失败时保留上一份可用配置。
+- 中转节点一键部署必须是真一键：管理员选择出口节点和监听端口后，部署流程必须自动创建 `relay_backends`、下发并等待 HAProxy reload 成功；选择替换旧角色时必须自动停用同服务器旧出口记录，不能把“部署 agent 成功但未绑定后端”视为成功。
 - 隐藏出口 IP 时，订阅只下发中转线路，并在出口节点防火墙只放行中转服务器 IP。
 - 涉及中转数据表、node-agent relay 模式、订阅输出或部署流程时，必须同步更新 `开发方案.md`、`文档/中转/中转设计.md`、接口文档和架构决策。
 

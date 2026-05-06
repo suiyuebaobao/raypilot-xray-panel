@@ -157,7 +157,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="deployDialogVisible" title="一键部署中转节点" width="520px">
+    <el-dialog v-model="deployDialogVisible" title="一键部署中转节点" width="640px">
       <el-form :model="deployForm" :rules="deployRules" ref="deployFormRef" label-width="120px">
         <el-alert title="部署成功后会创建中转记录，启动 node-agent relay 模式和 HAProxy" type="info" :closable="false" style="margin-bottom: 16px" />
         <el-form-item label="服务器 IP" prop="ssh_host">
@@ -180,6 +180,27 @@
         </el-form-item>
         <el-form-item label="中转 Token">
           <el-input v-model="deployForm.relay_token" placeholder="留空自动生成" />
+        </el-form-item>
+        <el-form-item label="出口节点" prop="exit_node_id">
+          <el-select v-model="deployForm.exit_node_id" filterable placeholder="部署后自动转发到该出口节点" style="width: 100%" @change="handleDeployExitNodeChange">
+            <el-option v-for="node in allNodes" :key="node.id" :label="formatNodeOption(node)" :value="node.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="监听端口" prop="listen_port">
+          <el-input-number v-model="deployForm.listen_port" :min="1" :max="65535" />
+        </el-form-item>
+        <el-form-item label="目标端口">
+          <el-input-number v-model="deployForm.target_port" :min="1" :max="65535" />
+        </el-form-item>
+        <el-form-item label="后端名称">
+          <el-input v-model="deployForm.backend_name" placeholder="可选，默认 中转 -> 出口节点" />
+        </el-form-item>
+        <el-form-item label="替换旧角色">
+          <el-switch
+            v-model="deployForm.replace_existing_role"
+            active-text="自动停用同服务器旧出口"
+            inactive-text="保留旧记录"
+          />
         </el-form-item>
       </el-form>
 
@@ -247,6 +268,11 @@ const deployForm = reactive({
   center_url: window.location.origin,
   relay_token: '',
   forwarder_type: 'haproxy',
+  exit_node_id: null,
+  listen_port: 24443,
+  target_port: 443,
+  backend_name: '',
+  replace_existing_role: true,
 })
 
 const rules = {
@@ -271,6 +297,8 @@ const deployRules = {
   ssh_user: [{ required: true, message: '请输入 SSH 用户', trigger: 'blur' }],
   ssh_password: [{ required: true, message: '请输入 SSH 密码', trigger: 'blur' }],
   center_url: [{ required: true, message: '请输入中心服务地址', trigger: 'blur' }],
+  exit_node_id: [{ required: true, message: '请选择出口节点', trigger: 'change' }],
+  listen_port: [{ required: true, message: '请输入监听端口', trigger: 'blur' }],
 }
 
 const backendsDialogTitle = computed(() => {
@@ -556,6 +584,7 @@ async function handleSaveBackends() {
 function showDeployDialog() {
   deploySteps.value = []
   deployDialogVisible.value = true
+  fetchNodesForDeploy()
 }
 
 async function handleDeploy() {
@@ -583,6 +612,26 @@ async function handleDeploy() {
     ElMessage.error(err.message || '部署失败')
   } finally {
     deploying.value = false
+  }
+}
+
+async function fetchNodesForDeploy() {
+  try {
+    const res = await adminApi.nodes.list()
+    allNodes.value = normalizeNodes(res.data).filter((node) => node.is_enabled)
+  } catch (err) {
+    ElMessage.error(err.message || '获取出口节点失败')
+  }
+}
+
+function handleDeployExitNodeChange() {
+  const node = allNodes.value.find((item) => String(item.id) === String(deployForm.exit_node_id))
+  if (node?.port) {
+    deployForm.target_port = node.port
+  }
+  if (node && !deployForm.backend_name) {
+    const relayName = deployForm.relay_name || deployForm.ssh_host || '中转节点'
+    deployForm.backend_name = `${relayName} -> ${node.name || formatNodeAddress(node)}`
   }
 }
 

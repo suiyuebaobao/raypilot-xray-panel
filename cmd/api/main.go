@@ -115,9 +115,9 @@ func main() {
 	adminUserHandler := handler.NewAdminUserHandlerWithSubscription(userRepo, subRepo, tokenRepo, planRepo, nodeAccessSvc, cfg.BCryptRounds, cfg.XrayUserKeyDomain)
 	adminOrderHandler := handler.NewAdminOrderHandler(orderRepo)
 	adminPlanNodeGroupHandler := handler.NewPlanNodeGroupHandlerWithSync(planRepo, subRepo, nodeAccessSvc)
-	nodeDeploySvc := service.NewNodeDeployService(nodeRepo, nodeHostRepo)
+	nodeDeploySvc := service.NewNodeDeployServiceWithAutomation(nodeRepo, nodeHostRepo, nodeGroupRepo, relayRepo, nodeAccessSvc)
 	nodeDeployHandler := handler.NewNodeDeployHandler(nodeDeploySvc)
-	relayDeploySvc := service.NewRelayDeployService(relayRepo)
+	relayDeploySvc := service.NewRelayDeployServiceWithAutomation(relayRepo, relaySvc, nodeRepo, nodeAccessSvc)
 	relayDeployHandler := handler.NewRelayDeployHandler(relayDeploySvc)
 
 	// 设置 Gin 模式
