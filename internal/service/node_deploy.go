@@ -72,6 +72,8 @@ type DeployRequest struct {
 	NodeToken           string   `json:"node_token"`
 	NodeName            string   `json:"node_name"`
 	TrafficPool         string   `json:"traffic_pool"`
+	OutboundType        string   `json:"outbound_type"`
+	OutboundProxyURL    string   `json:"outbound_proxy_url"`
 	Transport           string   `json:"transport"`
 	Transports          []string `json:"transports"`
 	TCPPort             uint32   `json:"tcp_port"`
@@ -143,6 +145,8 @@ type MultiExitNodeConfig struct {
 	IP                string `json:"ip"`
 	Port              uint32 `json:"port"`
 	Transport         string `json:"transport"`
+	OutboundType      string `json:"outbound_type,omitempty"`
+	OutboundProxyURL  string `json:"outbound_proxy_url,omitempty"`
 	XHTTPPath         string `json:"xhttp_path,omitempty"`
 	XHTTPHost         string `json:"xhttp_host,omitempty"`
 	XHTTPMode         string `json:"xhttp_mode,omitempty"`
@@ -397,12 +401,16 @@ func (s *NodeDeployService) Deploy(ctx context.Context, req *DeployRequest) (*De
 		Name:           nodeName,
 		Protocol:       "vless",
 		TrafficPool:    model.NormalizeTrafficPool(req.TrafficPool),
+		OutboundType:   normalizeDeployOutboundType(req.OutboundType),
 		Host:           req.SSHHost,
 		ServerName:     "www.microsoft.com",
 		LineMode:       "direct_and_relay",
 		AgentBaseURL:   fmt.Sprintf("http://%s:8080", req.SSHHost),
 		AgentTokenHash: hex.EncodeToString(hash[:]),
 		IsEnabled:      true,
+	}
+	if trimmed := strings.TrimSpace(req.OutboundProxyURL); trimmed != "" {
+		node.OutboundProxyURL = &trimmed
 	}
 	applyDeployTransportOption(node, options[0])
 	node, err = s.nodeRepo.Create(ctx, node)
@@ -636,6 +644,7 @@ func (s *NodeDeployService) deployMultiLine(ctx context.Context, req *DeployRequ
 				Name:           nodeName,
 				Protocol:       "vless",
 				TrafficPool:    model.NormalizeTrafficPool(req.TrafficPool),
+				OutboundType:   normalizeDeployOutboundType(req.OutboundType),
 				Host:           ip,
 				ServerName:     "www.microsoft.com",
 				LineMode:       "direct_and_relay",
@@ -646,6 +655,9 @@ func (s *NodeDeployService) deployMultiLine(ctx context.Context, req *DeployRequ
 				AgentTokenHash: tokenHash,
 				IsEnabled:      true,
 				SortWeight:     i*len(options) + j,
+			}
+			if trimmed := strings.TrimSpace(req.OutboundProxyURL); trimmed != "" {
+				node.OutboundProxyURL = &trimmed
 			}
 			applyDeployTransportOption(node, option)
 			node, err = s.nodeRepo.Create(ctx, node)
@@ -665,6 +677,8 @@ func (s *NodeDeployService) deployMultiLine(ctx context.Context, req *DeployRequ
 				IP:                listenIP,
 				Port:              node.Port,
 				Transport:         node.Transport,
+				OutboundType:      node.OutboundType,
+				OutboundProxyURL:  strings.TrimSpace(derefString(node.OutboundProxyURL)),
 				XHTTPPath:         node.XHTTPPath,
 				XHTTPHost:         node.XHTTPHost,
 				XHTTPMode:         node.XHTTPMode,
@@ -703,6 +717,20 @@ func (s *NodeDeployService) deployMultiLine(ctx context.Context, req *DeployRequ
 		result.Message = "多传输节点部署成功"
 	}
 	return result, nil
+}
+
+func normalizeDeployOutboundType(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), model.NodeOutboundSocks5) {
+		return model.NodeOutboundSocks5
+	}
+	return model.NodeOutboundDirect
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func deployListenIP(multiIPEnabled bool, host string) string {
@@ -924,6 +952,8 @@ func (s *NodeDeployService) startContainer(client *ssh.Client, centerURL string,
 		-e NODE_ID=%d \
 		-e NODE_TOKEN=%s \
 		-e NODE_TRANSPORT=%s \
+		-e OUTBOUND_TYPE=%s \
+		-e OUTBOUND_PROXY_URL=%s \
 		-e XHTTP_PATH=%s \
 		-e XHTTP_HOST=%s \
 		-e XHTTP_MODE=%s \
@@ -931,7 +961,7 @@ func (s *NodeDeployService) startContainer(client *ssh.Client, centerURL string,
 		-e XRAY_CONFIG_PATH=/usr/local/etc/xray/config.json \
 		-e XRAY_API_SERVER=127.0.0.1:10085 \
 		-v /usr/local/etc/xray:/usr/local/etc/xray:rw \
-		raypilot/node-agent:latest`, shellQuote(containerName), shellQuote(centerURL), node.ID, shellQuote(nodeToken), shellQuote(node.Transport), shellQuote(node.XHTTPPath), shellQuote(node.XHTTPHost), shellQuote(node.XHTTPMode))
+		raypilot/node-agent:latest`, shellQuote(containerName), shellQuote(centerURL), node.ID, shellQuote(nodeToken), shellQuote(node.Transport), shellQuote(node.OutboundType), shellQuote(derefString(node.OutboundProxyURL)), shellQuote(node.XHTTPPath), shellQuote(node.XHTTPHost), shellQuote(node.XHTTPMode))
 
 	out, err := client.Exec(cmd)
 	if err != nil {

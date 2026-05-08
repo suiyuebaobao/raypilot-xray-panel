@@ -27,6 +27,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -86,6 +87,8 @@ type Config struct {
 	NodeID            uint64 // 节点 ID
 	NodeToken         string // 节点鉴权 Token（明文传输，服务端只保存哈希）
 	NodeTransport     string // 单出口节点传输层：tcp 或 xhttp
+	OutboundType      string // 单出口节点出站方式：direct 或 socks5
+	OutboundProxyURL  string // 单出口节点上游 socks5 地址
 	XHTTPPath         string // XHTTP 请求路径
 	XHTTPHost         string // XHTTP Host
 	XHTTPMode         string // XHTTP 模式
@@ -145,6 +148,8 @@ func loadConfig() *Config {
 		}
 		cfg.NodeToken = plainToken
 		cfg.NodeTransport = normalizeAgentTransport(getEnv("NODE_TRANSPORT", "tcp"))
+		cfg.OutboundType = normalizeAgentOutboundType(getEnv("OUTBOUND_TYPE", "direct"))
+		cfg.OutboundProxyURL = strings.TrimSpace(getEnv("OUTBOUND_PROXY_URL", ""))
 		cfg.XHTTPPath = normalizeAgentXHTTPPath(getEnv("XHTTP_PATH", ""))
 		cfg.XHTTPHost = strings.TrimSpace(getEnv("XHTTP_HOST", ""))
 		cfg.XHTTPMode = normalizeAgentXHTTPMode(getEnv("XHTTP_MODE", ""))
@@ -272,12 +277,23 @@ func normalizeAgentXHTTPMode(mode string) string {
 	}
 }
 
+func normalizeAgentOutboundType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "socks5":
+		return "socks5"
+	default:
+		return "direct"
+	}
+}
+
 // MultiExitNodeConfig 是 multi_exit 模式下一个逻辑出口节点的本地配置。
 type MultiExitNodeConfig struct {
 	NodeID            uint64 `json:"node_id"`
 	IP                string `json:"ip"`
 	Port              uint32 `json:"port"`
 	Transport         string `json:"transport"`
+	OutboundType      string `json:"outbound_type,omitempty"`
+	OutboundProxyURL  string `json:"outbound_proxy_url,omitempty"`
 	XHTTPPath         string `json:"xhttp_path,omitempty"`
 	XHTTPHost         string `json:"xhttp_host,omitempty"`
 	XHTTPMode         string `json:"xhttp_mode,omitempty"`
@@ -721,14 +737,16 @@ func (a *Agent) generateDefaultXrayConfig() error {
 
 	reality := multiExitReality{ServerName: "www.microsoft.com", PublicKey: strings.TrimSpace(publicKey), PrivateKey: strings.TrimSpace(privateKey)}
 	node := MultiExitNodeConfig{
-		NodeID:     a.cfg.NodeID,
-		IP:         "0.0.0.0",
-		Port:       443,
-		Transport:  a.cfg.NodeTransport,
-		XHTTPPath:  a.cfg.XHTTPPath,
-		XHTTPHost:  a.cfg.XHTTPHost,
-		XHTTPMode:  a.cfg.XHTTPMode,
-		InboundTag: "",
+		NodeID:           a.cfg.NodeID,
+		IP:               "0.0.0.0",
+		Port:             443,
+		Transport:        a.cfg.NodeTransport,
+		OutboundType:     a.cfg.OutboundType,
+		OutboundProxyURL: a.cfg.OutboundProxyURL,
+		XHTTPPath:        a.cfg.XHTTPPath,
+		XHTTPHost:        a.cfg.XHTTPHost,
+		XHTTPMode:        a.cfg.XHTTPMode,
+		InboundTag:       "",
 	}
 	cfg := buildExitXrayConfigMap(node, reality, []interface{}{}, a.cfg.XrayAPIServer)
 	configData, err := json.MarshalIndent(cfg, "", "  ")
@@ -918,12 +936,10 @@ func buildXrayConfigMap(nodes []MultiExitNodeConfig, reality multiExitReality, c
 		if clients == nil {
 			clients = []interface{}{}
 		}
-		outbound := map[string]interface{}{
-			"tag":      node.OutboundTag,
-			"protocol": "freedom",
-		}
-		if ip := strings.TrimSpace(node.IP); ip != "" && ip != "0.0.0.0" && ip != "::" {
-			outbound["sendThrough"] = ip
+		outbound, err := buildNodeOutbound(node)
+		if err != nil {
+			log.Printf("[agent] build outbound for node %d failed: %v", node.NodeID, err)
+			continue
 		}
 		streamSettings := buildRealityStreamSettings(node, reality)
 		inbounds = append(inbounds, map[string]interface{}{
@@ -961,6 +977,74 @@ func buildXrayConfigMap(nodes []MultiExitNodeConfig, reality multiExitReality, c
 		"inbounds":  inbounds,
 		"outbounds": outbounds,
 	}
+}
+
+func buildNodeOutbound(node MultiExitNodeConfig) (map[string]interface{}, error) {
+	outboundType := strings.ToLower(strings.TrimSpace(node.OutboundType))
+	switch outboundType {
+	case "", "direct":
+		outbound := map[string]interface{}{
+			"tag":      node.OutboundTag,
+			"protocol": "freedom",
+		}
+		if ip := strings.TrimSpace(node.IP); ip != "" && ip != "0.0.0.0" && ip != "::" {
+			outbound["sendThrough"] = ip
+		}
+		return outbound, nil
+	case "socks5":
+		return buildSocks5Outbound(node)
+	default:
+		return nil, fmt.Errorf("unsupported outbound_type: %s", outboundType)
+	}
+}
+
+func buildSocks5Outbound(node MultiExitNodeConfig) (map[string]interface{}, error) {
+	rawURL := strings.TrimSpace(node.OutboundProxyURL)
+	if rawURL == "" {
+		return nil, fmt.Errorf("outbound_proxy_url is required for socks5 outbound")
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse outbound proxy url: %w", err)
+	}
+	if parsed.Scheme != "socks5" {
+		return nil, fmt.Errorf("unsupported socks proxy scheme: %s", parsed.Scheme)
+	}
+	host := strings.TrimSpace(parsed.Hostname())
+	port := parsed.Port()
+	if host == "" || port == "" {
+		return nil, fmt.Errorf("invalid socks5 proxy host or port")
+	}
+	serverPort, err := strconv.Atoi(port)
+	if err != nil || serverPort <= 0 || serverPort > 65535 {
+		return nil, fmt.Errorf("invalid socks5 proxy port: %s", port)
+	}
+	outbound := map[string]interface{}{
+		"tag":      node.OutboundTag,
+		"protocol": "socks",
+		"settings": map[string]interface{}{
+			"servers": []interface{}{
+				map[string]interface{}{
+					"address": host,
+					"port":    serverPort,
+				},
+			},
+		},
+	}
+	if parsed.User != nil {
+		username := parsed.User.Username()
+		password, _ := parsed.User.Password()
+		if username != "" || password != "" {
+			server := outbound["settings"].(map[string]interface{})["servers"].([]interface{})[0].(map[string]interface{})
+			server["users"] = []interface{}{
+				map[string]interface{}{
+					"user": username,
+					"pass": password,
+				},
+			}
+		}
+	}
+	return outbound, nil
 }
 
 func buildRealityStreamSettings(node MultiExitNodeConfig, reality multiExitReality) map[string]interface{} {

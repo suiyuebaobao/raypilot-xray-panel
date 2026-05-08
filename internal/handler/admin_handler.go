@@ -722,23 +722,29 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 			_ = h.nodeHostRepo.Delete(c.Request.Context(), nodeHost.ID)
 		}
 		for i, option := range options {
+			var outboundProxyURL *string
+			if trimmed := strings.TrimSpace(req.OutboundProxyURL); trimmed != "" {
+				outboundProxyURL = &trimmed
+			}
 			node := &model.Node{
-				Name:           multiTransportNodeName(req.Name, option),
-				Protocol:       req.Protocol,
-				TrafficPool:    model.NormalizeTrafficPool(req.TrafficPool),
-				Host:           req.Host,
-				ServerName:     req.ServerName,
-				PublicKey:      req.PublicKey,
-				ShortID:        req.ShortID,
-				Fingerprint:    req.Fingerprint,
-				LineMode:       req.LineMode,
-				NodeHostID:     &nodeHost.ID,
-				ListenIP:       listenIP,
-				OutboundIP:     listenIP,
-				AgentBaseURL:   req.AgentBaseURL,
-				AgentTokenHash: agentTokenHash,
-				SortWeight:     req.SortWeight + i,
-				IsEnabled:      req.IsEnabled,
+				Name:             multiTransportNodeName(req.Name, option),
+				Protocol:         req.Protocol,
+				TrafficPool:      model.NormalizeTrafficPool(req.TrafficPool),
+				OutboundType:     normalizeNodeOutboundType(req.OutboundType),
+				Host:             req.Host,
+				ServerName:       req.ServerName,
+				PublicKey:        req.PublicKey,
+				ShortID:          req.ShortID,
+				Fingerprint:      req.Fingerprint,
+				LineMode:         req.LineMode,
+				NodeHostID:       &nodeHost.ID,
+				ListenIP:         listenIP,
+				OutboundIP:       listenIP,
+				OutboundProxyURL: outboundProxyURL,
+				AgentBaseURL:     req.AgentBaseURL,
+				AgentTokenHash:   agentTokenHash,
+				SortWeight:       req.SortWeight + i,
+				IsEnabled:        req.IsEnabled,
 			}
 			applyNodeTransportOption(node, option)
 			created, err := h.nodeRepo.Create(c.Request.Context(), node)
@@ -761,20 +767,26 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 		return
 	}
 
+	var outboundProxyURL *string
+	if trimmed := strings.TrimSpace(req.OutboundProxyURL); trimmed != "" {
+		outboundProxyURL = &trimmed
+	}
 	node := &model.Node{
-		Name:           req.Name,
-		Protocol:       req.Protocol,
-		TrafficPool:    model.NormalizeTrafficPool(req.TrafficPool),
-		Host:           req.Host,
-		ServerName:     req.ServerName,
-		PublicKey:      req.PublicKey,
-		ShortID:        req.ShortID,
-		Fingerprint:    req.Fingerprint,
-		LineMode:       req.LineMode,
-		AgentBaseURL:   req.AgentBaseURL,
-		AgentTokenHash: agentTokenHash,
-		SortWeight:     req.SortWeight,
-		IsEnabled:      req.IsEnabled,
+		Name:             req.Name,
+		Protocol:         req.Protocol,
+		TrafficPool:      model.NormalizeTrafficPool(req.TrafficPool),
+		OutboundType:     normalizeNodeOutboundType(req.OutboundType),
+		Host:             req.Host,
+		ServerName:       req.ServerName,
+		PublicKey:        req.PublicKey,
+		ShortID:          req.ShortID,
+		Fingerprint:      req.Fingerprint,
+		LineMode:         req.LineMode,
+		OutboundProxyURL: outboundProxyURL,
+		AgentBaseURL:     req.AgentBaseURL,
+		AgentTokenHash:   agentTokenHash,
+		SortWeight:       req.SortWeight,
+		IsEnabled:        req.IsEnabled,
 	}
 	applyNodeTransportOption(node, options[0])
 	node, err = h.nodeRepo.Create(c.Request.Context(), node)
@@ -820,6 +832,9 @@ func (h *AdminNodeHandler) Update(c *gin.Context) {
 	if req.TrafficPool != "" {
 		node.TrafficPool = model.NormalizeTrafficPool(req.TrafficPool)
 	}
+	if req.OutboundType != "" {
+		node.OutboundType = normalizeNodeOutboundType(req.OutboundType)
+	}
 	if req.Transport == "" {
 		req.Transport = node.Transport
 	}
@@ -849,6 +864,11 @@ func (h *AdminNodeHandler) Update(c *gin.Context) {
 	node.XHTTPPath = req.XHTTPPath
 	node.XHTTPHost = req.XHTTPHost
 	node.XHTTPMode = req.XHTTPMode
+	if trimmed := strings.TrimSpace(req.OutboundProxyURL); trimmed != "" {
+		node.OutboundProxyURL = &trimmed
+	} else {
+		node.OutboundProxyURL = nil
+	}
 	node.AgentBaseURL = req.AgentBaseURL
 	if req.AgentToken != "" {
 		h := sha256.Sum256([]byte(req.AgentToken))
@@ -870,6 +890,13 @@ func (h *AdminNodeHandler) Update(c *gin.Context) {
 	h.syncNodeChange(c.Request.Context(), node.ID, oldGroupIDs, newGroupIDs, oldEnabled, node.IsEnabled)
 
 	response.Success(c, node)
+}
+
+func normalizeNodeOutboundType(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), model.NodeOutboundSocks5) {
+		return model.NodeOutboundSocks5
+	}
+	return model.NodeOutboundDirect
 }
 
 // Delete 处理 DELETE /api/admin/nodes/:id — 删除节点。

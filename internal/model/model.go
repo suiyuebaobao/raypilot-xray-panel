@@ -12,6 +12,8 @@ import (
 const (
 	TrafficPoolNormal      = "normal"
 	TrafficPoolResidential = "residential"
+	NodeOutboundDirect     = "direct"
+	NodeOutboundSocks5     = "socks5"
 )
 
 func NormalizeTrafficPool(pool string) string {
@@ -343,6 +345,7 @@ type Node struct {
 	Protocol             string     `gorm:"column:protocol;type:varchar(32);default:vless" json:"protocol"`
 	Transport            string     `gorm:"column:transport;type:varchar(32);default:tcp" json:"transport"`
 	TrafficPool          string     `gorm:"column:traffic_pool;type:varchar(32);default:normal" json:"traffic_pool"`
+	OutboundType         string     `gorm:"column:outbound_type;type:varchar(32);default:direct" json:"outbound_type"`
 	Host                 string     `gorm:"column:host;type:varchar(255)" json:"host"`
 	Port                 uint32     `gorm:"column:port;default:443" json:"port"`
 	ServerName           string     `gorm:"column:server_name;type:varchar(255)" json:"server_name"`
@@ -357,6 +360,7 @@ type Node struct {
 	NodeHostID           *uint64    `gorm:"column:node_host_id;index" json:"node_host_id,omitempty"`
 	ListenIP             string     `gorm:"column:listen_ip;type:varchar(45)" json:"listen_ip"`
 	OutboundIP           string     `gorm:"column:outbound_ip;type:varchar(45)" json:"outbound_ip"`
+	OutboundProxyURL     *string    `gorm:"column:outbound_proxy_url;type:text" json:"outbound_proxy_url,omitempty"`
 	XrayInboundTag       string     `gorm:"column:xray_inbound_tag;type:varchar(64)" json:"xray_inbound_tag"`
 	XrayOutboundTag      string     `gorm:"column:xray_outbound_tag;type:varchar(64)" json:"xray_outbound_tag"`
 	NodeGroupID          *uint64    `gorm:"column:node_group_id;index" json:"node_group_id"`
@@ -383,51 +387,55 @@ func (Node) TableName() string {
 
 // CreateNodeRequest 创建节点请求。
 type CreateNodeRequest struct {
-	Name         string   `json:"name" binding:"required"`
-	Protocol     string   `json:"protocol" default:"vless"`
-	Transport    string   `json:"transport" binding:"omitempty,oneof=tcp xhttp"`
-	Transports   []string `json:"transports" binding:"omitempty,dive,oneof=tcp xhttp"`
-	TrafficPool  string   `json:"traffic_pool" binding:"omitempty,oneof=normal residential"`
-	Host         string   `json:"host" binding:"required"`
-	Port         uint32   `json:"port" default:"443"`
-	TCPPort      uint32   `json:"tcp_port"`
-	XHTTPPort    uint32   `json:"xhttp_port"`
-	ServerName   string   `json:"server_name"`
-	PublicKey    string   `json:"public_key"`
-	ShortID      string   `json:"short_id"`
-	Fingerprint  string   `json:"fingerprint" default:"chrome"`
-	Flow         string   `json:"flow" default:"xtls-rprx-vision"`
-	LineMode     string   `json:"line_mode" binding:"omitempty,oneof=direct_only relay_only direct_and_relay"`
-	XHTTPPath    string   `json:"xhttp_path"`
-	XHTTPHost    string   `json:"xhttp_host"`
-	XHTTPMode    string   `json:"xhttp_mode" binding:"omitempty,oneof=auto packet-up stream-up stream-one"`
-	AgentBaseURL string   `json:"agent_base_url" binding:"required"`
-	AgentToken   string   `json:"agent_token" binding:"required"`
-	SortWeight   int      `json:"sort_weight"`
-	IsEnabled    bool     `json:"is_enabled"`
+	Name             string   `json:"name" binding:"required"`
+	Protocol         string   `json:"protocol" default:"vless"`
+	Transport        string   `json:"transport" binding:"omitempty,oneof=tcp xhttp"`
+	Transports       []string `json:"transports" binding:"omitempty,dive,oneof=tcp xhttp"`
+	TrafficPool      string   `json:"traffic_pool" binding:"omitempty,oneof=normal residential"`
+	OutboundType     string   `json:"outbound_type" binding:"omitempty,oneof=direct socks5"`
+	Host             string   `json:"host" binding:"required"`
+	Port             uint32   `json:"port" default:"443"`
+	TCPPort          uint32   `json:"tcp_port"`
+	XHTTPPort        uint32   `json:"xhttp_port"`
+	ServerName       string   `json:"server_name"`
+	PublicKey        string   `json:"public_key"`
+	ShortID          string   `json:"short_id"`
+	Fingerprint      string   `json:"fingerprint" default:"chrome"`
+	Flow             string   `json:"flow" default:"xtls-rprx-vision"`
+	LineMode         string   `json:"line_mode" binding:"omitempty,oneof=direct_only relay_only direct_and_relay"`
+	XHTTPPath        string   `json:"xhttp_path"`
+	XHTTPHost        string   `json:"xhttp_host"`
+	XHTTPMode        string   `json:"xhttp_mode" binding:"omitempty,oneof=auto packet-up stream-up stream-one"`
+	OutboundProxyURL string   `json:"outbound_proxy_url"`
+	AgentBaseURL     string   `json:"agent_base_url" binding:"required"`
+	AgentToken       string   `json:"agent_token" binding:"required"`
+	SortWeight       int      `json:"sort_weight"`
+	IsEnabled        bool     `json:"is_enabled"`
 }
 
 // UpdateNodeRequest 更新节点请求。
 type UpdateNodeRequest struct {
-	Name         string `json:"name" binding:"required"`
-	Protocol     string `json:"protocol"`
-	Transport    string `json:"transport" binding:"omitempty,oneof=tcp xhttp"`
-	TrafficPool  string `json:"traffic_pool" binding:"omitempty,oneof=normal residential"`
-	Host         string `json:"host" binding:"required"`
-	Port         uint32 `json:"port"`
-	ServerName   string `json:"server_name"`
-	PublicKey    string `json:"public_key"`
-	ShortID      string `json:"short_id"`
-	Fingerprint  string `json:"fingerprint"`
-	Flow         string `json:"flow"`
-	LineMode     string `json:"line_mode" binding:"omitempty,oneof=direct_only relay_only direct_and_relay"`
-	XHTTPPath    string `json:"xhttp_path"`
-	XHTTPHost    string `json:"xhttp_host"`
-	XHTTPMode    string `json:"xhttp_mode" binding:"omitempty,oneof=auto packet-up stream-up stream-one"`
-	AgentBaseURL string `json:"agent_base_url" binding:"required"`
-	AgentToken   string `json:"agent_token"`
-	SortWeight   int    `json:"sort_weight"`
-	IsEnabled    bool   `json:"is_enabled"`
+	Name             string `json:"name" binding:"required"`
+	Protocol         string `json:"protocol"`
+	Transport        string `json:"transport" binding:"omitempty,oneof=tcp xhttp"`
+	TrafficPool      string `json:"traffic_pool" binding:"omitempty,oneof=normal residential"`
+	OutboundType     string `json:"outbound_type" binding:"omitempty,oneof=direct socks5"`
+	Host             string `json:"host" binding:"required"`
+	Port             uint32 `json:"port"`
+	ServerName       string `json:"server_name"`
+	PublicKey        string `json:"public_key"`
+	ShortID          string `json:"short_id"`
+	Fingerprint      string `json:"fingerprint"`
+	Flow             string `json:"flow"`
+	LineMode         string `json:"line_mode" binding:"omitempty,oneof=direct_only relay_only direct_and_relay"`
+	XHTTPPath        string `json:"xhttp_path"`
+	XHTTPHost        string `json:"xhttp_host"`
+	XHTTPMode        string `json:"xhttp_mode" binding:"omitempty,oneof=auto packet-up stream-up stream-one"`
+	OutboundProxyURL string `json:"outbound_proxy_url"`
+	AgentBaseURL     string `json:"agent_base_url" binding:"required"`
+	AgentToken       string `json:"agent_token"`
+	SortWeight       int    `json:"sort_weight"`
+	IsEnabled        bool   `json:"is_enabled"`
 }
 
 // Relay 中转节点模型。

@@ -137,6 +137,8 @@ JWT 双 Token：
 ### 双流量池规则
 
 - 出口节点必须声明流量池归属：`nodes.traffic_pool` 取值固定为 `normal` 或 `residential`，默认 `normal`。
+- 普通节点按本机出口 IP 建模；家宽节点按上游代理账号建模。`nodes.outbound_type=direct` 表示普通直连出口，`nodes.outbound_type=socks5` 表示家宽上游代理出口。
+- 家宽代理节点一条 `nodes` 记录只允许绑定一个上游 SOCKS5 账号；用户前台看到的是多条独立节点和多条订阅线路，而不是一个节点后面自动轮询多个家宽账号。
 - `/api/agent/traffic` 与 `/api/agent/multi/traffic` 处理流量时，必须先读取节点 `traffic_pool`，再把增量流量记入对应订阅流量池。
 - `usage_ledgers` 必须记录流量池归属，便于区分普通流量和家宽流量账本。
 - 订阅生成时必须按节点流量池过滤：某个流量池剩余为 0 时，该池节点和对应中转线路不得继续出现在订阅里；另一个池有剩余时仍可继续下发。
@@ -171,6 +173,7 @@ JWT 双 Token：
 - XHTTP 节点仍使用 VLESS + Reality，但必须清空 `flow`，不得给 Xray clients 或订阅写入 `xtls-rprx-vision`。
 - XHTTP 参数由 `nodes.xhttp_path`、`nodes.xhttp_host`、`nodes.xhttp_mode` 管理；订阅输出必须包含 `network/type=xhttp` 和 XHTTP 参数。
 - 节点的 `traffic_pool` 与协议、传输层独立；同一物理服务器可同时部署普通池和家宽池逻辑节点。
+- 节点的 `outbound_type` 与 `traffic_pool` 独立；同一物理服务器可同时托管普通 IP 型节点和 SOCKS5 上游型家宽节点。
 - 管理后台新增节点和一键部署允许多选传输模式；单选时仍创建一条 `nodes`，多选时按每种传输模式创建一条逻辑 `nodes` 线路。
 - 同一 IP 同时选择 TCP 与 XHTTP 时必须使用不同端口；默认 TCP 443、XHTTP 8443，不能在同一个 Xray inbound 上混用两种 network。
 - 修改 XHTTP 字段、订阅格式、Xray `xhttpSettings` 或 node-agent 用户同步时，必须同步更新三份规则文件、`开发方案.md` 和相关接口/部署文档，并运行后端测试、前端构建和 Playwright smoke。
@@ -183,7 +186,7 @@ JWT 双 Token：
 - 多 IP 模式下 `node_hosts` 表示一台物理服务器和唯一 node-agent 身份，`nodes` 表示逻辑出口节点；一个公网出口 IP 对应一条 `nodes` 记录。
 - multi_exit 模式只安装一个 `node-agent`，使用 `AGENT_ROLE=multi_exit`、`NODE_HOST_ID`、`NODE_HOST_TOKEN` 和 `MULTI_NODE_CONFIG` 管理同一物理服务器下的多个逻辑节点。
 - 即使不是多出口 IP，只要一键部署选择了多个传输模式，也必须按多逻辑节点处理，并在目标服务器只运行一个 multi_exit node-agent。
-- multi_exit 生成的 Xray 配置必须为每个逻辑节点创建独立 inbound/outbound：`listen` 绑定该节点 IP，`freedom.sendThrough` 也绑定同一 IP，避免双 IP 服务器出站归属漂移。
+- multi_exit 生成的 Xray 配置必须为每个逻辑节点创建独立 inbound/outbound：普通节点使用 `freedom.sendThrough` 绑定本机出口 IP；家宽代理节点使用 `socks` outbound 指向唯一 `outbound_proxy_url`。
 - multi_exit 对中心仍必须按 `node_id` 分别心跳、领取任务、上报任务结果和用户级流量；中心账本、套餐授权和订阅生成继续以 `nodes.id` 为归属。
 - multi_exit 写入 Xray clients 时必须使用节点内部分隔的统计 email，避免同一用户跨多个逻辑节点的 Xray Stats 累计值混在一起；上报中心前再还原为原始 `xray_user_key`。
 - 出口节点一键部署必须是真一键：部署成功后自动绑定管理员选择的节点分组、触发已有活跃订阅用户同步；选择替换旧角色时必须自动停用同服务器旧 relay 和旧出口记录，不能依赖人工再去后台补分组或停旧线路。

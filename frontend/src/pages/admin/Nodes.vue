@@ -87,6 +87,15 @@
             <el-option label="家宽流量" value="residential" />
           </el-select>
         </el-form-item>
+        <el-form-item label="出站方式">
+          <el-select v-model="form.outbound_type" style="width: 100%">
+            <el-option label="本机直连" value="direct" />
+            <el-option label="上游 SOCKS5" value="socks5" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="form.outbound_type === 'socks5'" label="上游代理 URL">
+          <el-input v-model="form.outbound_proxy_url" placeholder="socks5://user:pass@host:port" />
+        </el-form-item>
         <el-form-item label="传输模式">
           <el-select v-model="form.transports" multiple :multiple-limit="isEdit ? 1 : 2" style="width: 100%" @change="handleTransportSelectionChange(form)">
             <el-option label="TCP + Reality" value="tcp" />
@@ -177,6 +186,15 @@
             <el-option label="普通流量" value="normal" />
             <el-option label="家宽流量" value="residential" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="出站方式">
+          <el-select v-model="deployForm.outbound_type" style="width: 100%">
+            <el-option label="本机直连" value="direct" />
+            <el-option label="上游 SOCKS5" value="socks5" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="deployForm.outbound_type === 'socks5'" label="上游代理 URL">
+          <el-input v-model="deployForm.outbound_proxy_url" placeholder="socks5://user:pass@host:port" />
         </el-form-item>
         <el-form-item label="节点分组">
           <el-select v-model="deployForm.node_group_ids" multiple filterable placeholder="部署成功后自动加入分组" style="width: 100%">
@@ -298,6 +316,8 @@ const form = reactive({
   name: '',
   host: '',
   traffic_pool: 'normal',
+  outbound_type: 'direct',
+  outbound_proxy_url: '',
   transports: ['tcp'],
   tcp_port: 443,
   xhttp_port: 443,
@@ -350,6 +370,8 @@ const deployForm = reactive({
   ssh_password: '',
   node_name: '',
   traffic_pool: 'normal',
+  outbound_type: 'direct',
+  outbound_proxy_url: '',
   center_url: window.location.origin,
   node_token: '',
   transports: ['tcp'],
@@ -446,6 +468,8 @@ async function handleDeploy() {
       ssh_password: deployForm.ssh_password,
       node_name: deployForm.node_name,
       traffic_pool: deployForm.traffic_pool,
+      outbound_type: deployForm.outbound_type,
+      outbound_proxy_url: deployForm.outbound_proxy_url,
       center_url: deployForm.center_url,
       node_token: deployForm.node_token,
       transports,
@@ -549,6 +573,8 @@ function resetForm() {
   form.name = ''
   form.host = ''
   form.traffic_pool = 'normal'
+  form.outbound_type = 'direct'
+  form.outbound_proxy_url = ''
   form.transports = ['tcp']
   form.tcp_port = 443
   form.xhttp_port = 443
@@ -577,6 +603,8 @@ function showEditDialog(row) {
   form.name = row.name
   form.host = row.host
   form.traffic_pool = row.traffic_pool || 'normal'
+  form.outbound_type = row.outbound_type || 'direct'
+  form.outbound_proxy_url = row.outbound_proxy_url || ''
   form.transports = [row.transport || 'tcp']
   form.tcp_port = (row.transport || 'tcp') === 'tcp' ? row.port : 443
   form.xhttp_port = row.transport === 'xhttp' ? row.port : 443
@@ -613,6 +641,8 @@ async function handleSave() {
       name: form.name,
       host: form.host,
       traffic_pool: form.traffic_pool,
+      outbound_type: form.outbound_type,
+      outbound_proxy_url: form.outbound_proxy_url,
       port: primaryTransport === 'xhttp' ? form.xhttp_port : form.tcp_port,
       transports,
       transport: primaryTransport,

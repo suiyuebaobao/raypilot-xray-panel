@@ -763,6 +763,46 @@ func TestAdminHandler_CreateNode(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestAdminHandler_CreateNode_SavesSocks5Outbound(t *testing.T) {
+	r, adminToken := setupTestAdminApp(t)
+
+	body := map[string]interface{}{
+		"name":               "socks5-home-node",
+		"protocol":           "vless",
+		"host":               "203.0.113.250",
+		"port":               24463,
+		"traffic_pool":       "residential",
+		"outbound_type":      "socks5",
+		"outbound_proxy_url": "socks5://user:pass@example.com:3010",
+		"transport":          "tcp",
+		"server_name":        "www.microsoft.com",
+		"public_key":         "test-public-key-home-12345678901234567890",
+		"short_id":           "1a2b3c4d",
+		"fingerprint":        "chrome",
+		"flow":               "xtls-rprx-vision",
+		"line_mode":          "direct_only",
+		"agent_base_url":     "http://203.0.113.250:18080",
+		"agent_token":        "socks5-agent-token",
+		"is_enabled":         true,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/nodes", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(t, "socks5", data["outbound_type"])
+	assert.Equal(t, "socks5://user:pass@example.com:3010", data["outbound_proxy_url"])
+	assert.Equal(t, "residential", data["traffic_pool"])
+}
+
 func TestAdminHandler_CreateNode_XHTTPNormalizesTransport(t *testing.T) {
 	r, token := setupTestAdminApp(t)
 

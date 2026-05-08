@@ -243,6 +243,68 @@ func TestBuildMultiExitXrayConfigMap_XHTTPStreamSettings(t *testing.T) {
 	}
 }
 
+func TestBuildMultiExitXrayConfigMap_Socks5Outbound(t *testing.T) {
+	cfg := buildMultiExitXrayConfigMap([]MultiExitNodeConfig{
+		{
+			NodeID:            150,
+			IP:                "156.238.231.16",
+			Port:              24465,
+			Transport:         "tcp",
+			OutboundType:      "socks5",
+			OutboundProxyURL:  "socks5://user:pass@us.arxlabs.io:3010",
+			InboundTag:        "node_150_in",
+			OutboundTag:       "node_150_out",
+			XrayUserKeyPrefix: "node_150__",
+		},
+	}, multiExitReality{
+		ServerName: "www.microsoft.com",
+		PublicKey:  "pub",
+		PrivateKey: "priv",
+		ShortID:    "",
+	}, nil, "127.0.0.1:10085")
+
+	outbounds := cfg["outbounds"].([]interface{})
+	var target map[string]interface{}
+	for _, outbound := range outbounds {
+		item := outbound.(map[string]interface{})
+		if item["tag"] == "node_150_out" {
+			target = item
+			break
+		}
+	}
+	if target == nil {
+		t.Fatalf("node_150_out outbound missing: %#v", outbounds)
+	}
+	if target["protocol"] != "socks" {
+		t.Fatalf("protocol = %#v, want socks", target["protocol"])
+	}
+	settings := target["settings"].(map[string]interface{})
+	servers := settings["servers"].([]interface{})
+	server := servers[0].(map[string]interface{})
+	if server["address"] != "us.arxlabs.io" {
+		t.Fatalf("address = %#v, want us.arxlabs.io", server["address"])
+	}
+	if server["port"] != 3010 {
+		t.Fatalf("port = %#v, want 3010", server["port"])
+	}
+	users := server["users"].([]interface{})
+	user := users[0].(map[string]interface{})
+	if user["user"] != "user" || user["pass"] != "pass" {
+		t.Fatalf("users = %#v, want user/pass", users)
+	}
+}
+
+func TestBuildNodeOutbound_Socks5RequiresProxyURL(t *testing.T) {
+	_, err := buildNodeOutbound(MultiExitNodeConfig{
+		NodeID:       150,
+		OutboundTag:  "node_150_out",
+		OutboundType: "socks5",
+	})
+	if err == nil {
+		t.Fatal("expected error for empty outbound_proxy_url")
+	}
+}
+
 func TestXrayStatValueUnmarshal_AcceptsNumberAndString(t *testing.T) {
 	var numberValue xrayStatValue
 	if err := json.Unmarshal([]byte(`123`), &numberValue); err != nil {
