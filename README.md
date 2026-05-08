@@ -21,9 +21,11 @@ English keywords: xray panel, xray-core panel, vless reality panel, vpn panel, p
 - Clash/mihomo, Shadowrocket-compatible, Base64, and plain URI subscription output
 - Direct and relay line generation in one subscription token
 - Multi-group node management for plans and user access control
+- VLESS Reality TCP and XHTTP transport modes, including multi-select deployment
+- Normal and residential traffic pools with SOCKS5 upstream residential exits
 - node-agent driven user sync, heartbeat, task execution, and traffic reporting
 - HAProxy TCP relay management with safe config validation and reload
-- One-click exit node and relay node deployment
+- One-click exit node, multi-IP node, SOCKS5 residential node, and relay node deployment
 - Per-user traffic ledger, daily/weekly/monthly summaries, and quota enforcement
 - Admin console and user portal built with Vue 3 and Element Plus
 - MySQL migrations, Docker Compose, Nginx, and systemd deployment examples
@@ -34,21 +36,49 @@ English keywords: xray panel, xray-core panel, vless reality panel, vpn panel, p
 | --- | --- |
 | ![Admin dashboard](assets/screenshots/admin-dashboard.png) | ![Exit node management](assets/screenshots/admin-nodes.png) |
 
-| Multi-IP deployment | Node groups |
+| Multi-IP deployment | Residential SOCKS5 nodes |
 | --- | --- |
-| ![Multi-IP node deployment](assets/screenshots/admin-node-multi-ip-deploy.png) | ![Node group management](assets/screenshots/admin-node-groups.png) |
+| ![Multi-IP node deployment](assets/screenshots/admin-node-multi-ip-deploy.png) | ![Residential SOCKS5 node form](assets/screenshots/admin-node-residential-socks5.png) |
 
-| Plans and groups | Relay nodes |
+| Node groups | Relay nodes |
 | --- | --- |
-| ![Plan management](assets/screenshots/admin-plans.png) | ![Relay management](assets/screenshots/admin-relays.png) |
+| ![Node group management](assets/screenshots/admin-node-groups.png) | ![Relay management](assets/screenshots/admin-relays.png) |
 
-| Subscription tokens | User portal |
+| Relay deployment | Users |
 | --- | --- |
-| ![Subscription token management](assets/screenshots/admin-subscription-tokens.png) | ![User subscription](assets/screenshots/user-subscription.png) |
+| ![Relay one-click deployment](assets/screenshots/admin-relay-one-click-deploy.png) | ![User management](assets/screenshots/admin-users.png) |
 
-| Log center | User plans |
+| Plans and orders | Redeem code management |
 | --- | --- |
-| ![Admin log center](assets/screenshots/admin-logs.png) | ![User plans](assets/screenshots/user-plans.png) |
+| ![Plan management](assets/screenshots/admin-plans.png) | ![Redeem code management](assets/screenshots/admin-redeem-codes.png) |
+
+| Generated redeem codes | Subscription tokens |
+| --- | --- |
+| ![Generated redeem codes](assets/screenshots/admin-redeem-code-generated.png) | ![Subscription token management](assets/screenshots/admin-subscription-tokens.png) |
+
+| Admin orders | Log center |
+| --- | --- |
+| ![Admin orders](assets/screenshots/admin-orders.png) | ![Admin log center](assets/screenshots/admin-logs.png) |
+
+| User home | User subscription |
+| --- | --- |
+| ![User home](assets/screenshots/user-home.png) | ![User subscription](assets/screenshots/user-subscription.png) |
+
+| User plans | User orders |
+| --- | --- |
+| ![User plans](assets/screenshots/user-plans.png) | ![User orders](assets/screenshots/user-orders.png) |
+
+| User redeem | User profile |
+| --- | --- |
+| ![User redeem](assets/screenshots/user-redeem.png) | ![User profile](assets/screenshots/user-profile.png) |
+
+| Login and register | Mobile subscription |
+| --- | --- |
+| ![User login](assets/screenshots/user-login.png) | ![Mobile user subscription](assets/screenshots/mobile-user-subscription.png) |
+
+| User registration | Admin login |
+| --- | --- |
+| ![User registration](assets/screenshots/user-register.png) | ![Admin login](assets/screenshots/admin-login.png) |
 
 ## Tech Stack
 
