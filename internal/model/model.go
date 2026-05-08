@@ -403,12 +403,14 @@ type CreateNodeRequest struct {
 	Fingerprint      string   `json:"fingerprint" default:"chrome"`
 	Flow             string   `json:"flow" default:"xtls-rprx-vision"`
 	LineMode         string   `json:"line_mode" binding:"omitempty,oneof=direct_only relay_only direct_and_relay"`
+	NodeHostID       *uint64  `json:"node_host_id"`
 	XHTTPPath        string   `json:"xhttp_path"`
 	XHTTPHost        string   `json:"xhttp_host"`
 	XHTTPMode        string   `json:"xhttp_mode" binding:"omitempty,oneof=auto packet-up stream-up stream-one"`
+	OutboundIP       string   `json:"outbound_ip"`
 	OutboundProxyURL string   `json:"outbound_proxy_url"`
-	AgentBaseURL     string   `json:"agent_base_url" binding:"required"`
-	AgentToken       string   `json:"agent_token" binding:"required"`
+	AgentBaseURL     string   `json:"agent_base_url"`
+	AgentToken       string   `json:"agent_token"`
 	SortWeight       int      `json:"sort_weight"`
 	IsEnabled        bool     `json:"is_enabled"`
 }
@@ -431,6 +433,7 @@ type UpdateNodeRequest struct {
 	XHTTPPath        string `json:"xhttp_path"`
 	XHTTPHost        string `json:"xhttp_host"`
 	XHTTPMode        string `json:"xhttp_mode" binding:"omitempty,oneof=auto packet-up stream-up stream-one"`
+	OutboundIP       string `json:"outbound_ip"`
 	OutboundProxyURL string `json:"outbound_proxy_url"`
 	AgentBaseURL     string `json:"agent_base_url" binding:"required"`
 	AgentToken       string `json:"agent_token"`

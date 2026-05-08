@@ -207,6 +207,25 @@ func TestLoadMultiNodeConfig_AllowsSameIPWithDifferentPorts(t *testing.T) {
 	}
 }
 
+func TestLoadMultiNodeConfig_NormalizesOutboundIP(t *testing.T) {
+	t.Setenv("MULTI_NODE_CONFIG", `[
+		{"node_id": 1, "ip": "0.0.0.0", "port": 443, "outbound_type": "socks5", "outbound_ip": " 203.0.113.88 ", "outbound_proxy_url": "socks5://u:p@example.com:3010"},
+		{"node_id": 2, "ip": "0.0.0.0", "port": 8443, "outbound_ip": "not-an-ip"}
+	]`)
+	t.Setenv("MULTI_NODE_CONFIG_PATH", "")
+
+	nodes, err := loadMultiNodeConfig()
+	if err != nil {
+		t.Fatalf("loadMultiNodeConfig returned error: %v", err)
+	}
+	if nodes[0].OutboundIP != "203.0.113.88" {
+		t.Fatalf("nodes[0].OutboundIP = %q, want 203.0.113.88", nodes[0].OutboundIP)
+	}
+	if nodes[1].OutboundIP != "" {
+		t.Fatalf("nodes[1].OutboundIP = %q, want empty", nodes[1].OutboundIP)
+	}
+}
+
 func TestBuildMultiExitXrayConfigMap_XHTTPStreamSettings(t *testing.T) {
 	cfg := buildMultiExitXrayConfigMap([]MultiExitNodeConfig{
 		{
@@ -251,6 +270,7 @@ func TestBuildMultiExitXrayConfigMap_Socks5Outbound(t *testing.T) {
 			Port:              24465,
 			Transport:         "tcp",
 			OutboundType:      "socks5",
+			OutboundIP:        "203.0.113.88",
 			OutboundProxyURL:  "socks5://user:pass@us.arxlabs.io:3010",
 			InboundTag:        "node_150_in",
 			OutboundTag:       "node_150_out",
@@ -277,6 +297,9 @@ func TestBuildMultiExitXrayConfigMap_Socks5Outbound(t *testing.T) {
 	}
 	if target["protocol"] != "socks" {
 		t.Fatalf("protocol = %#v, want socks", target["protocol"])
+	}
+	if target["sendThrough"] != "203.0.113.88" {
+		t.Fatalf("sendThrough = %#v, want 203.0.113.88", target["sendThrough"])
 	}
 	settings := target["settings"].(map[string]interface{})
 	servers := settings["servers"].([]interface{})

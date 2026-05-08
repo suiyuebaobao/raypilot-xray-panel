@@ -6,8 +6,10 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
+	"suiyue/internal/model"
 	"suiyue/internal/platform/response"
 	"suiyue/internal/service"
 
@@ -203,6 +205,9 @@ func sanitizeNodeDeployRequest(req *service.DeployRequest) map[string]interface{
 		"target_server_ip":      req.SSHHost,
 		"node_name":             req.NodeName,
 		"traffic_pool":          req.TrafficPool,
+		"outbound_type":         req.OutboundType,
+		"outbound_ip":           req.OutboundIP,
+		"outbound_proxy_count":  sanitizeOutboundProxyCount(req.OutboundType, req.OutboundProxyURL),
 		"transport":             req.Transport,
 		"transports":            req.Transports,
 		"tcp_port":              req.TCPPort,
@@ -216,6 +221,19 @@ func sanitizeNodeDeployRequest(req *service.DeployRequest) map[string]interface{
 		"replace_existing_role": req.ReplaceExistingRole,
 		"node_token_provided":   req.NodeToken != "",
 	}
+}
+
+func sanitizeOutboundProxyCount(outboundType, raw string) int {
+	if !strings.EqualFold(strings.TrimSpace(outboundType), model.NodeOutboundSocks5) {
+		return 0
+	}
+	count := 0
+	for _, part := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
+		if strings.TrimSpace(part) != "" {
+			count++
+		}
+	}
+	return count
 }
 
 func sanitizeRelayDeployRequest(req *service.RelayDeployRequest, targetHost string, targetPort uint32) map[string]interface{} {

@@ -103,6 +103,13 @@ func TestNormalizeDeployOutboundProxyURLs_MultipleLines(t *testing.T) {
 	}, values)
 }
 
+func TestNormalizeOptionalIPv4_AcceptsAutoAndIPv4(t *testing.T) {
+	require.Equal(t, "203.0.113.88", normalizeOptionalIPv4(" 203.0.113.88 "))
+	require.Empty(t, normalizeOptionalIPv4("auto"))
+	require.Empty(t, normalizeOptionalIPv4("AUTO"))
+	require.Empty(t, normalizeOptionalIPv4("not-an-ip"))
+}
+
 func TestDeployProxyNodeName_WithMultipleProxyAndTransport(t *testing.T) {
 	name := deployProxyNodeName("美国家宽", "156.238.231.16", 1, 3, deployTransportOption{Transport: "xhttp"}, 2)
 

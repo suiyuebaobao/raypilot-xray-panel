@@ -61,6 +61,7 @@ Go 代码必须使用 `gofmt`。包名保持短小、全小写。测试命名优
 
 - 出口节点必须声明流量池归属：`nodes.traffic_pool` 取值固定为 `normal` 或 `residential`，默认 `normal`。
 - 普通节点按本机出口 IP 建模；家宽节点按上游代理账号建模。`nodes.outbound_type=direct` 表示普通直连出口，`nodes.outbound_type=socks5` 表示家宽上游代理出口。
+- `nodes.outbound_ip` 语义按出站方式区分：直连节点表示该逻辑节点的真实本机出口 IP，并写入 Xray `freedom.sendThrough`；SOCKS5 家宽节点表示连接上游代理时使用的本机源 IP，并写入 Xray `socks.sendThrough`，不代表上游家宽最终出口 IP。
 - 家宽代理节点一条 `nodes` 记录只允许绑定一个上游 SOCKS5 账号；用户前台看到的是多条独立节点和多条订阅线路，而不是一个节点后面自动轮询多个家宽账号。
 - 如果管理员一次导入多条 SOCKS5，上层必须拆成多条逻辑 `nodes`，而不是把多条 SOCKS5 塞进一条节点记录。
 - `/api/agent/traffic` 与 `/api/agent/multi/traffic` 处理流量时，必须先读取节点 `traffic_pool`，再把增量流量记入对应订阅流量池。
@@ -92,9 +93,10 @@ Go 代码必须使用 `gofmt`。包名保持短小、全小写。测试命名优
 - 多出口 IP 服务器必须由管理员在一键部署前显式开启“多 IP 服务器”模式；未开启时不得扫描服务器出口 IP，也不得自动创建多个节点。
 - 开启多 IP 模式后，必须先通过 SSH 扫描服务器公网 IPv4，并验证 `curl --interface <IP>` 的实际出口等于该 IP；只有管理员手动勾选确认的可用公网 IP 才能创建为逻辑出口节点。
 - 多 IP 模式下 `node_hosts` 表示一台物理服务器和唯一 node-agent 身份，`nodes` 表示逻辑出口节点；一个公网出口 IP 对应一条 `nodes` 记录。
+- 管理后台出口节点列表必须按节点服务器聚合展示：外层一行表示一台物理服务器，显示管理 IP、全部相关 IP、普通/家宽线路数量、SOCKS5 数量、TCP/XHTTP 数量；展开或编辑服务器时再展示具体 `nodes` 逻辑线路。新增家宽或普通线路时应优先绑定同一 `node_host_id`，而不是创建另一个物理服务器身份。
 - multi_exit 模式只安装一个 `node-agent`，使用 `AGENT_ROLE=multi_exit`、`NODE_HOST_ID`、`NODE_HOST_TOKEN` 和 `MULTI_NODE_CONFIG` 管理同一物理服务器下的多个逻辑节点。
 - 即使不是多出口 IP，只要一键部署选择了多个传输模式，也必须按多逻辑节点处理，并在目标服务器只运行一个 multi_exit node-agent。
-- multi_exit 生成的 Xray 配置必须为每个逻辑节点创建独立 inbound/outbound：普通节点使用 `freedom.sendThrough` 绑定本机出口 IP；家宽代理节点使用 `socks` outbound 指向唯一 `outbound_proxy_url`。
+- multi_exit 生成的 Xray 配置必须为每个逻辑节点创建独立 inbound/outbound：普通节点使用 `freedom.sendThrough` 绑定本机出口 IP；家宽代理节点使用 `socks` outbound 指向唯一 `outbound_proxy_url`，如果设置了 `nodes.outbound_ip`，还必须把它作为 `socks.sendThrough`。
 - multi_exit 对中心仍必须按 `node_id` 分别心跳、领取任务、上报任务结果和用户级流量；中心账本、套餐授权和订阅生成继续以 `nodes.id` 为归属。
 - multi_exit 写入 Xray clients 时必须使用节点内部分隔的统计 email，避免同一用户跨多个逻辑节点的 Xray Stats 累计值混在一起；上报中心前再还原为原始 `xray_user_key`。
 - 出口节点一键部署必须是真一键：部署成功后自动绑定管理员选择的节点分组、触发已有活跃订阅用户同步；选择替换旧角色时必须自动停用同服务器旧 relay 和旧出口记录，不能依赖人工再去后台补分组或停旧线路。

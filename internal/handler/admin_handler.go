@@ -698,6 +698,17 @@ func nodeListenIPForHost(host string) string {
 	return "0.0.0.0"
 }
 
+func normalizeOptionalNodeIPv4(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.EqualFold(value, "auto") {
+		return ""
+	}
+	if ip := net.ParseIP(value); ip != nil && ip.To4() != nil {
+		return ip.To4().String()
+	}
+	return ""
+}
+
 // Create 处理 POST /api/admin/nodes — 创建节点。
 func (h *AdminNodeHandler) Create(c *gin.Context) {
 	var req model.CreateNodeRequest
@@ -719,6 +730,12 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 	if req.LineMode == "" {
 		req.LineMode = "direct_and_relay"
 	}
+	if req.NodeHostID == nil || *req.NodeHostID == 0 {
+		if strings.TrimSpace(req.AgentBaseURL) == "" || strings.TrimSpace(req.AgentToken) == "" {
+			response.HandleError(c, response.ErrBadRequest)
+			return
+		}
+	}
 	proxyURLs := normalizeNodeOutboundProxyURLs(req.OutboundType, req.OutboundProxyURL)
 	if normalizeNodeOutboundType(req.OutboundType) == model.NodeOutboundSocks5 && len(proxyURLs) == 0 {
 		response.HandleError(c, response.ErrBadRequest)
@@ -732,22 +749,44 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 		agentTokenHash = hex.EncodeToString(h[:])
 	}
 
+	var nodeHostID *uint64
+	var createdNodeHost *model.NodeHost
+	if req.NodeHostID != nil && *req.NodeHostID != 0 {
+		if h.nodeHostRepo == nil {
+			response.HandleError(c, response.ErrInternalServer)
+			return
+		}
+		nodeHost, err := h.nodeHostRepo.FindByID(c.Request.Context(), *req.NodeHostID)
+		if err != nil {
+			response.HandleError(c, response.ErrBadRequest)
+			return
+		}
+		nodeHostID = &nodeHost.ID
+		if strings.TrimSpace(req.AgentBaseURL) == "" {
+			req.AgentBaseURL = nodeHost.AgentBaseURL
+		}
+	}
+
 	if len(options) > 1 || len(proxyURLs) > 1 {
 		if h.nodeHostRepo == nil {
 			response.HandleError(c, response.ErrInternalServer)
 			return
 		}
-		nodeHost, err := h.nodeHostRepo.Create(c.Request.Context(), &model.NodeHost{
-			Name:           req.Name,
-			SSHHost:        req.Host,
-			SSHPort:        22,
-			AgentBaseURL:   req.AgentBaseURL,
-			AgentTokenHash: agentTokenHash,
-			IsEnabled:      true,
-		})
-		if err != nil {
-			response.HandleError(c, response.ErrInternalServer)
-			return
+		if nodeHostID == nil {
+			nodeHost, err := h.nodeHostRepo.Create(c.Request.Context(), &model.NodeHost{
+				Name:           req.Name,
+				SSHHost:        req.Host,
+				SSHPort:        22,
+				AgentBaseURL:   req.AgentBaseURL,
+				AgentTokenHash: agentTokenHash,
+				IsEnabled:      true,
+			})
+			if err != nil {
+				response.HandleError(c, response.ErrInternalServer)
+				return
+			}
+			createdNodeHost = nodeHost
+			nodeHostID = &nodeHost.ID
 		}
 		listenIP := nodeListenIPForHost(req.Host)
 		nodes := make([]*model.Node, 0, len(options))
@@ -757,12 +796,15 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 			for _, id := range createdNodeIDs {
 				_ = h.nodeRepo.Delete(c.Request.Context(), id)
 			}
-			_ = h.nodeHostRepo.Delete(c.Request.Context(), nodeHost.ID)
+			if createdNodeHost != nil {
+				_ = h.nodeHostRepo.Delete(c.Request.Context(), createdNodeHost.ID)
+			}
 		}
 		if len(proxyURLs) == 0 {
 			proxyURLs = []string{""}
 		}
 		outboundType := normalizeNodeOutboundType(req.OutboundType)
+		requestedOutboundIP := normalizeOptionalNodeIPv4(req.OutboundIP)
 		for proxyIndex, proxyURL := range proxyURLs {
 			for optionIndex, option := range options {
 				optionCopy := option
@@ -789,7 +831,7 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 					ShortID:        req.ShortID,
 					Fingerprint:    req.Fingerprint,
 					LineMode:       req.LineMode,
-					NodeHostID:     &nodeHost.ID,
+					NodeHostID:     nodeHostID,
 					ListenIP:       listenIP,
 					AgentBaseURL:   req.AgentBaseURL,
 					AgentTokenHash: agentTokenHash,
@@ -798,6 +840,8 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 				}
 				if outboundType == model.NodeOutboundDirect {
 					node.OutboundIP = listenIP
+				} else if requestedOutboundIP != "" {
+					node.OutboundIP = requestedOutboundIP
 				}
 				node.OutboundProxyURL = outboundProxyURL
 				applyNodeTransportOption(node, optionCopy)
@@ -818,7 +862,7 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 				nodes = append(nodes, created)
 			}
 		}
-		response.Success(c, gin.H{"node_host": nodeHost, "nodes": nodes})
+		response.Success(c, gin.H{"node_host": createdNodeHost, "node_host_id": nodeHostID, "nodes": nodes})
 		return
 	}
 
@@ -842,11 +886,17 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 		ShortID:          req.ShortID,
 		Fingerprint:      req.Fingerprint,
 		LineMode:         req.LineMode,
+		NodeHostID:       nodeHostID,
 		OutboundProxyURL: outboundProxyURL,
 		AgentBaseURL:     req.AgentBaseURL,
 		AgentTokenHash:   agentTokenHash,
 		SortWeight:       req.SortWeight,
 		IsEnabled:        req.IsEnabled,
+	}
+	if ip := normalizeOptionalNodeIPv4(req.OutboundIP); ip != "" {
+		node.OutboundIP = ip
+	} else if node.OutboundType == model.NodeOutboundDirect {
+		node.OutboundIP = nodeListenIPForHost(req.Host)
 	}
 	applyNodeTransportOption(node, options[0])
 	node, err = h.nodeRepo.Create(c.Request.Context(), node)
@@ -903,6 +953,13 @@ func (h *AdminNodeHandler) Update(c *gin.Context) {
 		node.Transport = req.Transport
 	}
 	node.Host = req.Host
+	if ip := normalizeOptionalNodeIPv4(req.OutboundIP); ip != "" {
+		node.OutboundIP = ip
+	} else if node.OutboundType == model.NodeOutboundDirect {
+		node.OutboundIP = nodeListenIPForHost(req.Host)
+	} else {
+		node.OutboundIP = ""
+	}
 	if req.Port != 0 {
 		node.Port = req.Port
 	}

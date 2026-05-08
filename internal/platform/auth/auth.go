@@ -6,6 +6,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -43,16 +45,29 @@ func GenerateToken(userID uint64, username string, isAdmin bool, secret string, 
 
 // GenerateRefreshToken 生成 Refresh Token。
 func GenerateRefreshToken(userID uint64, secret string, expiresAt time.Time) (string, error) {
+	tokenID, err := randomTokenID()
+	if err != nil {
+		return "", err
+	}
 	claims := &RefreshClaims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "suiyue",
+			ID:        tokenID,
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
+}
+
+func randomTokenID() (string, error) {
+	var data [16]byte
+	if _, err := rand.Read(data[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(data[:]), nil
 }
 
 // ParseClaims 解析 Access Token，返回 Claims。

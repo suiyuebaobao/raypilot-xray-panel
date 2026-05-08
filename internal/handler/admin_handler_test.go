@@ -773,6 +773,7 @@ func TestAdminHandler_CreateNode_SavesSocks5Outbound(t *testing.T) {
 		"port":               24463,
 		"traffic_pool":       "residential",
 		"outbound_type":      "socks5",
+		"outbound_ip":        "203.0.113.240",
 		"outbound_proxy_url": "socks5://user:pass@example.com:3010",
 		"transport":          "tcp",
 		"server_name":        "www.microsoft.com",
@@ -800,6 +801,7 @@ func TestAdminHandler_CreateNode_SavesSocks5Outbound(t *testing.T) {
 	data := resp["data"].(map[string]interface{})
 	assert.Equal(t, "socks5", data["outbound_type"])
 	assert.Equal(t, "socks5://user:pass@example.com:3010", data["outbound_proxy_url"])
+	assert.Equal(t, "203.0.113.240", data["outbound_ip"])
 	assert.Equal(t, "residential", data["traffic_pool"])
 }
 
@@ -812,6 +814,7 @@ func TestAdminHandler_CreateNode_MultipleSocks5CreatesMultipleLogicalNodes(t *te
 		"host":               "203.0.113.251",
 		"traffic_pool":       "residential",
 		"outbound_type":      "socks5",
+		"outbound_ip":        "203.0.113.240",
 		"outbound_proxy_url": "socks5://user1:pass1@example.com:3010\nsocks5://user2:pass2@example.com:3011",
 		"transports":         []string{"tcp", "xhttp"},
 		"tcp_port":           24463,
@@ -850,6 +853,7 @@ func TestAdminHandler_CreateNode_MultipleSocks5CreatesMultipleLogicalNodes(t *te
 		node := item.(map[string]interface{})
 		assert.Equal(t, "socks5", node["outbound_type"])
 		assert.Equal(t, "residential", node["traffic_pool"])
+		assert.Equal(t, "203.0.113.240", node["outbound_ip"])
 		if node["outbound_proxy_url"] != nil {
 			assert.Contains(t, node["outbound_proxy_url"].(string), "socks5://user")
 		}
@@ -864,6 +868,58 @@ func TestAdminHandler_CreateNode_MultipleSocks5CreatesMultipleLogicalNodes(t *te
 		}
 		seenPorts[port] = struct{}{}
 	}
+}
+
+func TestAdminHandler_CreateNode_AttachesToExistingNodeHost(t *testing.T) {
+	r, adminToken, db := setupTestAdminAppWithDB(t)
+	host := &model.NodeHost{
+		Name:           "host-existing",
+		SSHHost:        "203.0.113.88",
+		SSHPort:        22,
+		AgentBaseURL:   "http://203.0.113.88:8080",
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}
+	require.NoError(t, db.Create(host).Error)
+
+	body := map[string]interface{}{
+		"name":               "host-existing-home",
+		"protocol":           "vless",
+		"host":               "203.0.113.88",
+		"port":               25443,
+		"traffic_pool":       "residential",
+		"outbound_type":      "socks5",
+		"outbound_ip":        "203.0.113.88",
+		"outbound_proxy_url": "socks5://user:pass@example.com:3010",
+		"transport":          "tcp",
+		"node_host_id":       host.ID,
+		"server_name":        "www.microsoft.com",
+		"public_key":         "test-public-key-home-12345678901234567890",
+		"short_id":           "1a2b3c4d",
+		"agent_base_url":     "http://203.0.113.88:8080",
+		"agent_token":        "host-token",
+		"is_enabled":         true,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/nodes", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(t, float64(host.ID), data["node_host_id"])
+	assert.Equal(t, "203.0.113.88", data["outbound_ip"])
+
+	var node model.Node
+	require.NoError(t, db.First(&node, uint64(data["id"].(float64))).Error)
+	require.NotNil(t, node.NodeHostID)
+	assert.Equal(t, host.ID, *node.NodeHostID)
 }
 
 func TestAdminHandler_CreateNode_XHTTPNormalizesTransport(t *testing.T) {

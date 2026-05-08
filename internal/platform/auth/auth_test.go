@@ -49,6 +49,18 @@ func TestAuth_GenerateAndParseRefreshToken(t *testing.T) {
 	claims, err := auth.ParseRefreshClaims(token, testSecret)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(1), claims.UserID)
+	assert.NotEmpty(t, claims.ID)
+}
+
+func TestAuth_GenerateRefreshToken_UniquePerCall(t *testing.T) {
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+
+	tokenA, err := auth.GenerateRefreshToken(1, testSecret, expiresAt)
+	require.NoError(t, err)
+	tokenB, err := auth.GenerateRefreshToken(1, testSecret, expiresAt)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, tokenA, tokenB)
 }
 
 // TestAuth_ParseExpiredToken 测试解析过期 Token。
@@ -88,6 +100,3 @@ func TestAuth_AdminToken(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, claims.IsAdmin)
 }
-
-
-

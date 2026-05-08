@@ -8,50 +8,108 @@
       </div>
     </div>
 
-    <div v-if="selectedNodes.length" class="batch-toolbar">
-      <span>已选择 {{ selectedNodes.length }} 个出口节点</span>
+    <div v-if="selectedServers.length" class="batch-toolbar">
+      <span>已选择 {{ selectedServers.length }} 台节点服务器</span>
       <div>
-        <el-button size="small" @click="clearNodeSelection">取消选择</el-button>
-        <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDelete">批量删除</el-button>
+        <el-button size="small" @click="clearServerSelection">取消选择</el-button>
+        <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDeleteServers">批量删除</el-button>
       </div>
     </div>
 
     <el-table
-      ref="nodesTableRef"
-      :data="nodes"
+      ref="serversTableRef"
+      :data="nodeServers"
       border
       style="width: 100%"
       v-loading="loading"
-      @selection-change="handleNodeSelectionChange"
+      row-key="key"
+      @selection-change="handleServerSelectionChange"
     >
       <el-table-column type="selection" width="48" />
-      <el-table-column prop="id" label="ID" width="60" />
-      <el-table-column prop="name" label="节点名称" />
-      <el-table-column prop="host" label="地址" />
-      <el-table-column prop="port" label="端口" width="70" />
-      <el-table-column prop="transport" label="传输" width="120">
+      <el-table-column type="expand" width="44">
         <template #default="{ row }">
-          <el-tag effect="plain" :type="row.transport === 'xhttp' ? 'warning' : 'info'">{{ transportLabel(row.transport) }}</el-tag>
+          <el-table :data="row.nodes" border size="small" class="line-table">
+            <el-table-column prop="id" label="线路 ID" width="80" />
+            <el-table-column prop="name" label="线路名称" min-width="170" />
+            <el-table-column label="入口" min-width="150">
+              <template #default="{ row: line }">{{ line.host }}:{{ line.port }}</template>
+            </el-table-column>
+            <el-table-column label="协议" width="100">
+              <template #default="{ row: line }">
+                <el-tag effect="plain" :type="line.transport === 'xhttp' ? 'warning' : 'info'">{{ transportLabel(line.transport) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="流量池" width="90">
+              <template #default="{ row: line }">
+                <el-tag effect="plain" :type="line.traffic_pool === 'residential' ? 'warning' : 'success'">
+                  {{ line.traffic_pool === 'residential' ? '家宽' : '普通' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="出站" min-width="260">
+              <template #default="{ row: line }">
+                <div class="line-outbound">
+                  <span>{{ line.outbound_type === 'socks5' ? 'SOCKS5' : '本机直连' }}</span>
+                  <small v-if="line.outbound_ip">本机源 IP {{ line.outbound_ip }}</small>
+                  <small v-if="line.outbound_proxy_url">{{ maskProxyUrl(line.outbound_proxy_url) }}</small>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="线路输出" width="120">
+              <template #default="{ row: line }">
+                <el-tag effect="plain">{{ lineModeLabel(line.line_mode) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="80">
+              <template #default="{ row: line }">
+                <el-tag :type="line.is_enabled ? 'success' : 'info'">{{ line.is_enabled ? '启用' : '禁用' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="150">
+              <template #default="{ row: line }">
+                <el-button size="small" @click="showEditDialog(line)">编辑</el-button>
+                <el-button size="small" type="danger" @click="handleDelete(line)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </template>
       </el-table-column>
-      <el-table-column prop="traffic_pool" label="流量池" width="100">
+      <el-table-column label="节点服务器" min-width="220">
         <template #default="{ row }">
-          <el-tag effect="plain" :type="row.traffic_pool === 'residential' ? 'warning' : 'success'">
-            {{ row.traffic_pool === 'residential' ? '家宽' : '普通' }}
-          </el-tag>
+          <div class="server-cell">
+            <strong>{{ row.name }}</strong>
+            <small>{{ row.node_host_id ? `Host #${row.node_host_id}` : `单线路 #${row.nodes[0]?.id}` }}</small>
+          </div>
         </template>
       </el-table-column>
-      <el-table-column prop="line_mode" label="线路输出" width="130">
+      <el-table-column label="IP 信息" min-width="300">
         <template #default="{ row }">
-          <el-tag effect="plain">{{ lineModeLabel(row.line_mode) }}</el-tag>
+          <div class="ip-cell">
+            <div>管理 IP：{{ row.management_ip || '-' }}</div>
+            <div class="ip-tags">
+              <el-tag v-for="ip in row.ips" :key="ip" size="small" effect="plain">{{ ip }}</el-tag>
+            </div>
+          </div>
         </template>
       </el-table-column>
-      <el-table-column prop="is_enabled" label="状态" width="80">
+      <el-table-column label="能力摘要" min-width="300">
         <template #default="{ row }">
-          <el-tag :type="row.is_enabled ? 'success' : 'info'">{{ row.is_enabled ? '启用' : '禁用' }}</el-tag>
+          <div class="capability-tags">
+            <el-tag size="small" type="success" effect="plain">普通 {{ row.normal_count }}</el-tag>
+            <el-tag size="small" type="warning" effect="plain">家宽 {{ row.residential_count }}</el-tag>
+            <el-tag size="small" effect="plain">SOCKS5 {{ row.socks5_count }}</el-tag>
+            <el-tag size="small" effect="plain">TCP {{ row.tcp_count }}</el-tag>
+            <el-tag size="small" type="warning" effect="plain">XHTTP {{ row.xhttp_count }}</el-tag>
+            <el-tag size="small" type="info" effect="plain">线路 {{ row.nodes.length }}</el-tag>
+          </div>
         </template>
       </el-table-column>
-      <el-table-column prop="last_heartbeat_at" label="最后心跳" width="180">
+      <el-table-column label="状态" width="110">
+        <template #default="{ row }">
+          <el-tag :type="row.enabled_count ? 'success' : 'info'">{{ row.enabled_count ? '启用' : '禁用' }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="最后心跳" width="180">
         <template #default="{ row }">{{ row.last_heartbeat_at ? formatDate(row.last_heartbeat_at) : '-' }}</template>
       </el-table-column>
       <el-table-column label="流量上报" min-width="220">
@@ -65,10 +123,11 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180">
+      <el-table-column label="操作" width="250">
         <template #default="{ row }">
-          <el-button size="small" @click="showEditDialog(row)">编辑</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button size="small" type="primary" @click="showServerDialog(row)">编辑服务器</el-button>
+          <el-button size="small" @click="showAddResidentialForServer(row)">加家宽</el-button>
+          <el-button size="small" type="danger" @click="handleDeleteServer(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -100,6 +159,18 @@
             :rows="4"
             placeholder="每行一个 socks5://user:pass@host:port"
           />
+        </el-form-item>
+        <el-form-item v-if="form.outbound_type === 'socks5'" label="本机源 IP">
+          <el-select
+            v-model="form.outbound_ip"
+            filterable
+            allow-create
+            clearable
+            placeholder="自动选择，或指定连接上游 SOCKS5 的本机出口 IP"
+            style="width: 100%"
+          >
+            <el-option v-for="ip in outboundIpOptions" :key="ip" :label="ip" :value="ip" />
+          </el-select>
         </el-form-item>
         <el-form-item label="传输模式">
           <el-select v-model="form.transports" multiple :multiple-limit="isEdit ? 1 : 2" style="width: 100%" @change="handleTransportSelectionChange(form)">
@@ -206,6 +277,18 @@
             placeholder="每行一个 socks5://user:pass@host:port"
           />
         </el-form-item>
+        <el-form-item v-if="deployForm.outbound_type === 'socks5'" label="本机源 IP">
+          <el-select
+            v-model="deployForm.outbound_ip"
+            filterable
+            allow-create
+            clearable
+            placeholder="自动选择，或指定连接上游 SOCKS5 的本机出口 IP"
+            style="width: 100%"
+          >
+            <el-option v-for="ip in deployOutboundIpOptions" :key="ip" :label="ip" :value="ip" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="节点分组">
           <el-select v-model="deployForm.node_group_ids" multiple filterable placeholder="部署成功后自动加入分组" style="width: 100%">
             <el-option v-for="group in nodeGroups" :key="group.id" :label="group.name" :value="group.id" />
@@ -301,11 +384,65 @@
         <el-button type="success" @click="handleDeploy" :loading="deploying" :disabled="deploying">开始部署</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="serverDialogVisible" title="编辑节点服务器" width="920px">
+      <div v-if="activeServer" class="server-dialog">
+        <div class="server-dialog-summary">
+          <div>
+            <strong>{{ activeServer.name }}</strong>
+            <small>管理 IP：{{ activeServer.management_ip || '-' }}</small>
+          </div>
+          <div class="ip-tags">
+            <el-tag v-for="ip in activeServer.ips" :key="ip" size="small" effect="plain">{{ ip }}</el-tag>
+          </div>
+          <div class="capability-tags">
+            <el-tag size="small" type="success" effect="plain">普通 {{ activeServer.normal_count }}</el-tag>
+            <el-tag size="small" type="warning" effect="plain">家宽 {{ activeServer.residential_count }}</el-tag>
+            <el-tag size="small" effect="plain">线路 {{ activeServer.nodes.length }}</el-tag>
+          </div>
+        </div>
+        <div class="server-dialog-actions">
+          <el-button type="primary" @click="showAddNormalForServer(activeServer)">加普通线路</el-button>
+          <el-button @click="showAddResidentialForServer(activeServer)">加家宽线路</el-button>
+        </div>
+        <el-table :data="activeServer.nodes" border size="small">
+          <el-table-column prop="id" label="线路 ID" width="80" />
+          <el-table-column prop="name" label="线路名称" min-width="170" />
+          <el-table-column label="入口" min-width="150">
+            <template #default="{ row }">{{ row.host }}:{{ row.port }}</template>
+          </el-table-column>
+          <el-table-column label="协议" width="100">
+            <template #default="{ row }">{{ transportLabel(row.transport) }}</template>
+          </el-table-column>
+          <el-table-column label="流量池" width="90">
+            <template #default="{ row }">{{ row.traffic_pool === 'residential' ? '家宽' : '普通' }}</template>
+          </el-table-column>
+          <el-table-column label="出站" min-width="260">
+            <template #default="{ row }">
+              <div class="line-outbound">
+                <span>{{ row.outbound_type === 'socks5' ? 'SOCKS5' : '本机直连' }}</span>
+                <small v-if="row.outbound_ip">本机源 IP {{ row.outbound_ip }}</small>
+                <small v-if="row.outbound_proxy_url">{{ maskProxyUrl(row.outbound_proxy_url) }}</small>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="150">
+            <template #default="{ row }">
+              <el-button size="small" @click="showEditDialog(row)">编辑</el-button>
+              <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="serverDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { adminApi } from '@/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheck, CircleClose, Loading } from '@element-plus/icons-vue'
@@ -318,15 +455,18 @@ const isEdit = ref(false)
 const editingId = ref(null)
 const saving = ref(false)
 const formRef = ref(null)
-const nodesTableRef = ref(null)
-const selectedNodes = ref([])
+const serversTableRef = ref(null)
+const selectedServers = ref([])
 const batchDeleting = ref(false)
+const serverDialogVisible = ref(false)
+const activeServerKey = ref('')
 
 const form = reactive({
   name: '',
   host: '',
   traffic_pool: 'normal',
   outbound_type: 'direct',
+  outbound_ip: '',
   outbound_proxy_url: '',
   transports: ['tcp'],
   tcp_port: 443,
@@ -338,6 +478,7 @@ const form = reactive({
   public_key: '',
   short_id: '',
   line_mode: 'direct_and_relay',
+  node_host_id: null,
   agent_base_url: '',
   agent_token: '',
   is_enabled: true,
@@ -350,11 +491,10 @@ const rules = {
   xhttp_port: [{ required: true, message: '请输入 XHTTP 端口', trigger: 'blur' }],
   agent_base_url: [{ required: true, message: '请输入 Agent 地址', trigger: 'blur' }],
   agent_token: [{
-    required: true,
     message: '请输入 Agent Token',
     trigger: 'blur',
     validator: (rule, value, callback) => {
-      if (!isEdit.value && !value) {
+      if (!isEdit.value && !form.node_host_id && !value) {
         callback(new Error('请输入 Agent Token'))
       } else {
         callback()
@@ -381,6 +521,7 @@ const deployForm = reactive({
   node_name: '',
   traffic_pool: 'normal',
   outbound_type: 'direct',
+  outbound_ip: '',
   outbound_proxy_url: '',
   center_url: window.location.origin,
   node_token: '',
@@ -393,6 +534,14 @@ const deployForm = reactive({
   multi_ip_enabled: false,
   node_group_ids: [],
   replace_existing_role: true,
+})
+
+const nodeServers = computed(() => aggregateNodeServers(nodes.value))
+const activeServer = computed(() => nodeServers.value.find((server) => server.key === activeServerKey.value) || null)
+const outboundIpOptions = computed(() => collectKnownIPs(activeServer.value?.nodes || nodes.value, form.host))
+const deployOutboundIpOptions = computed(() => {
+  const scanned = scannedIps.value.filter((item) => item.is_usable).map((item) => item.ip)
+  return uniqueValues([deployForm.ssh_host, ...scanned])
 })
 
 const deployRules = {
@@ -423,6 +572,9 @@ function isScannedIpSelectable(row) {
 
 function handleScanIpSelectionChange(selection) {
   selectedDeployIps.value = selection
+  if (deployForm.outbound_type === 'socks5' && !deployForm.outbound_ip && selection.length) {
+    deployForm.outbound_ip = selection[0].ip
+  }
 }
 
 async function handleScanDeployIps() {
@@ -483,6 +635,7 @@ async function handleDeploy() {
       node_name: deployForm.node_name,
       traffic_pool: deployForm.traffic_pool,
       outbound_type: deployForm.outbound_type,
+      outbound_ip: deployForm.outbound_ip,
       outbound_proxy_url: deployForm.outbound_proxy_url,
       center_url: deployForm.center_url,
       node_token: deployForm.node_token,
@@ -583,11 +736,128 @@ function trafficSyncLabel(row) {
   return '未上报'
 }
 
+function parseDateValue(value) {
+  if (!value) return 0
+  const timestamp = new Date(value).getTime()
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+function maxDateString(values) {
+  return values.filter(Boolean).sort((a, b) => parseDateValue(b) - parseDateValue(a))[0] || ''
+}
+
+function uniqueValues(values) {
+  const seen = new Set()
+  const result = []
+  for (const value of values) {
+    const text = String(value || '').trim()
+    if (!text || seen.has(text)) continue
+    seen.add(text)
+    result.push(text)
+  }
+  return result
+}
+
+function isIPv4(value) {
+  const parts = String(value || '').trim().split('.')
+  return parts.length === 4 && parts.every((part) => /^\d+$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
+}
+
+function hostFromURL(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  try {
+    return new URL(text).hostname
+  } catch {
+    const match = text.match(/^[a-z]+:\/\/([^/:]+)/i)
+    return match ? match[1] : ''
+  }
+}
+
+function collectKnownIPs(lines, fallbackHost = '') {
+  const values = [fallbackHost]
+  for (const line of lines || []) {
+    values.push(line.host, line.listen_ip, line.outbound_ip, hostFromURL(line.agent_base_url))
+  }
+  return uniqueValues(values.filter(isIPv4))
+}
+
+function managementIPForLines(lines) {
+  for (const line of lines) {
+    const agentHost = hostFromURL(line.agent_base_url)
+    if (agentHost) return agentHost
+  }
+  for (const line of lines) {
+    if (line.host) return line.host
+  }
+  return ''
+}
+
+function serverNameForLines(lines, managementIP) {
+  const hostNode = lines.find((line) => line.node_host_id && line.name)
+  if (hostNode?.name) {
+    return hostNode.name.replace(/-\d+(-XHTTP)?$/i, '')
+  }
+  const first = lines[0]
+  return first?.name || managementIP || '未命名节点服务器'
+}
+
+function aggregateNodeServers(items) {
+  const groups = new Map()
+  for (const node of items || []) {
+    const agentHost = hostFromURL(node.agent_base_url)
+    const key = node.node_host_id
+      ? `host-${node.node_host_id}`
+      : node.agent_base_url
+        ? `agent-${node.agent_base_url}`
+        : `host-${node.host || node.id}`
+    if (!groups.has(key)) {
+      groups.set(key, [])
+    }
+    groups.get(key).push({ ...node, _agent_host: agentHost })
+  }
+
+  return [...groups.entries()].map(([key, lines]) => {
+    const sortedLines = [...lines].sort((a, b) => (a.sort_weight || 0) - (b.sort_weight || 0) || (a.id || 0) - (b.id || 0))
+    const managementIP = managementIPForLines(sortedLines)
+    const ips = collectKnownIPs(sortedLines, managementIP)
+    const errors = sortedLines.filter((line) => line.last_traffic_error)
+    return {
+      key,
+      name: serverNameForLines(sortedLines, managementIP),
+      node_host_id: sortedLines.find((line) => line.node_host_id)?.node_host_id || null,
+      management_ip: managementIP,
+      ips,
+      nodes: sortedLines,
+      normal_count: sortedLines.filter((line) => line.traffic_pool !== 'residential').length,
+      residential_count: sortedLines.filter((line) => line.traffic_pool === 'residential').length,
+      socks5_count: sortedLines.filter((line) => line.outbound_type === 'socks5').length,
+      tcp_count: sortedLines.filter((line) => (line.transport || 'tcp') === 'tcp').length,
+      xhttp_count: sortedLines.filter((line) => line.transport === 'xhttp').length,
+      enabled_count: sortedLines.filter((line) => line.is_enabled).length,
+      last_heartbeat_at: maxDateString(sortedLines.map((line) => line.last_heartbeat_at)),
+      last_traffic_report_at: maxDateString(sortedLines.map((line) => line.last_traffic_report_at)),
+      last_traffic_success_at: maxDateString(sortedLines.map((line) => line.last_traffic_success_at)),
+      last_traffic_error: errors[0]?.last_traffic_error || '',
+      traffic_error_count: errors.reduce((sum, line) => sum + (line.traffic_error_count || 1), 0),
+    }
+  }).sort((a, b) => (a.management_ip || '').localeCompare(b.management_ip || '') || a.name.localeCompare(b.name))
+}
+
+function maskProxyUrl(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^(socks5:\/\/[^:@\s]+):([^@\s]+)@/i, '$1:****@'))
+    .filter(Boolean)
+    .join('\n')
+}
+
 function resetForm() {
   form.name = ''
   form.host = ''
   form.traffic_pool = 'normal'
   form.outbound_type = 'direct'
+  form.outbound_ip = ''
   form.outbound_proxy_url = ''
   form.transports = ['tcp']
   form.tcp_port = 443
@@ -599,6 +869,7 @@ function resetForm() {
   form.public_key = ''
   form.short_id = ''
   form.line_mode = 'direct_and_relay'
+  form.node_host_id = null
   form.agent_base_url = ''
   form.agent_token = ''
   form.is_enabled = true
@@ -611,13 +882,56 @@ function showAddDialog() {
   dialogVisible.value = true
 }
 
+function prefillAddDialogFromServer(server, defaults = {}) {
+  isEdit.value = false
+  editingId.value = null
+  resetForm()
+  const first = server?.nodes?.[0] || {}
+  form.name = defaults.name || `${server.name}-${defaults.traffic_pool === 'residential' ? '家宽' : '普通'}`
+  form.host = first.host || server.management_ip || ''
+  form.traffic_pool = defaults.traffic_pool || 'normal'
+  form.outbound_type = defaults.outbound_type || 'direct'
+  form.outbound_ip = defaults.outbound_ip || (form.outbound_type === 'socks5' ? (server.ips?.[0] || '') : '')
+  form.line_mode = defaults.line_mode || first.line_mode || 'direct_and_relay'
+  form.agent_base_url = first.agent_base_url || ''
+  form.server_name = first.server_name || ''
+  form.public_key = first.public_key || ''
+  form.short_id = first.short_id || ''
+  form.node_host_id = server.node_host_id || null
+  form.xhttp_path = first.xhttp_path || '/raypilot'
+  form.xhttp_host = first.xhttp_host || ''
+  form.xhttp_mode = first.xhttp_mode || 'auto'
+  form.agent_token = ''
+  activeServerKey.value = server.key
+  serverDialogVisible.value = false
+  dialogVisible.value = true
+}
+
+function showAddResidentialForServer(server) {
+  prefillAddDialogFromServer(server, {
+    traffic_pool: 'residential',
+    outbound_type: 'socks5',
+    line_mode: 'direct_only',
+  })
+}
+
+function showAddNormalForServer(server) {
+  prefillAddDialogFromServer(server, {
+    traffic_pool: 'normal',
+    outbound_type: 'direct',
+    line_mode: 'direct_and_relay',
+  })
+}
+
 function showEditDialog(row) {
   isEdit.value = true
   editingId.value = row.id
+  serverDialogVisible.value = false
   form.name = row.name
   form.host = row.host
   form.traffic_pool = row.traffic_pool || 'normal'
   form.outbound_type = row.outbound_type || 'direct'
+  form.outbound_ip = row.outbound_ip || ''
   form.outbound_proxy_url = row.outbound_proxy_url || ''
   form.transports = [row.transport || 'tcp']
   form.tcp_port = (row.transport || 'tcp') === 'tcp' ? row.port : 443
@@ -629,6 +943,7 @@ function showEditDialog(row) {
   form.public_key = row.public_key || ''
   form.short_id = row.short_id || ''
   form.line_mode = row.line_mode || 'direct_and_relay'
+  form.node_host_id = row.node_host_id || null
   form.agent_base_url = row.agent_base_url
   form.agent_token = ''
   form.is_enabled = row.is_enabled
@@ -660,6 +975,7 @@ async function handleSave() {
       host: form.host,
       traffic_pool: form.traffic_pool,
       outbound_type: form.outbound_type,
+      outbound_ip: form.outbound_ip,
       outbound_proxy_url: form.outbound_proxy_url,
       port: primaryTransport === 'xhttp' ? form.xhttp_port : form.tcp_port,
       transports,
@@ -673,6 +989,7 @@ async function handleSave() {
       public_key: form.public_key,
       short_id: form.short_id,
       line_mode: form.line_mode,
+      node_host_id: form.node_host_id,
       agent_base_url: form.agent_base_url,
       agent_token: form.agent_token,
       is_enabled: form.is_enabled,
@@ -710,23 +1027,65 @@ async function handleDelete(row) {
   }
 }
 
-function handleNodeSelectionChange(selection) {
-  selectedNodes.value = selection
+function handleServerSelectionChange(selection) {
+  selectedServers.value = selection
 }
 
-function clearNodeSelection() {
-  nodesTableRef.value?.clearSelection()
+function clearServerSelection() {
+  serversTableRef.value?.clearSelection()
+}
+
+function showServerDialog(row) {
+  activeServerKey.value = row.key
+  serverDialogVisible.value = true
+}
+
+async function handleDeleteServer(row) {
+  const lines = row.nodes || []
+  if (!lines.length) return
+  try {
+    await ElMessageBox.confirm(`确定删除节点服务器"${row.name}"下的 ${lines.length} 条线路吗？`, '确认删除', { type: 'warning' })
+  } catch {
+    return
+  }
+
+  batchDeleting.value = true
+  const deletedIds = []
+  const failed = []
+  try {
+    for (const line of lines) {
+      try {
+        await adminApi.nodes.delete(line.id)
+        deletedIds.push(line.id)
+      } catch (err) {
+        failed.push(`${line.name || line.id}：${err.message || '删除失败'}`)
+      }
+    }
+    if (deletedIds.length) {
+      removeNodesFromList(deletedIds)
+    }
+    if (failed.length) {
+      ElMessage.warning(`成功删除 ${deletedIds.length} 条，失败 ${failed.length} 条：${failed.join('；')}`)
+    } else {
+      ElMessage.success('节点服务器删除成功')
+    }
+    fetchNodes().catch(() => {
+      ElMessage.warning('删除已生效，刷新列表失败')
+    })
+  } finally {
+    batchDeleting.value = false
+  }
 }
 
 async function handleBatchDelete() {
-  const rows = [...selectedNodes.value]
+  const rows = selectedServers.value.flatMap((server) => server.nodes || [])
   if (!rows.length) {
-    ElMessage.warning('请选择要删除的出口节点')
+    ElMessage.warning('请选择要删除的节点服务器')
     return
   }
 
   try {
-    await ElMessageBox.confirm(`确定批量删除选中的 ${rows.length} 个出口节点吗？`, '批量删除', { type: 'warning' })
+    await ElMessageBox.confirm(`确定批量删除选中节点服务器下的 ${rows.length} 条线路吗？`, '批量删除', { type: 'warning' })
   } catch {
     return
   }
@@ -760,10 +1119,16 @@ async function handleBatchDelete() {
   }
 }
 
+async function handleBatchDeleteServers() {
+  await handleBatchDelete()
+}
+
 function removeNodesFromList(ids) {
   const idSet = new Set(ids.map((id) => String(id)))
   nodes.value = nodes.value.filter((node) => !idSet.has(String(node.id)))
-  selectedNodes.value = selectedNodes.value.filter((node) => !idSet.has(String(node.id)))
+  selectedServers.value = selectedServers.value
+    .map((server) => ({ ...server, nodes: (server.nodes || []).filter((node) => !idSet.has(String(node.id))) }))
+    .filter((server) => server.nodes.length)
 }
 
 async function fetchNodes() {
@@ -879,5 +1244,50 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.line-table {
+  margin: 8px 0;
+}
+.server-cell,
+.ip-cell,
+.line-outbound,
+.server-dialog-summary > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.server-cell small,
+.line-outbound small,
+.server-dialog-summary small {
+  color: #909399;
+  font-size: 12px;
+}
+.ip-tags,
+.capability-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.server-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.server-dialog-summary {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 2fr 2fr;
+  gap: 12px;
+  align-items: start;
+}
+.server-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 900px) {
+  .server-dialog-summary {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

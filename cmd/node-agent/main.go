@@ -88,6 +88,7 @@ type Config struct {
 	NodeToken         string // 节点鉴权 Token（明文传输，服务端只保存哈希）
 	NodeTransport     string // 单出口节点传输层：tcp 或 xhttp
 	OutboundType      string // 单出口节点出站方式：direct 或 socks5
+	OutboundIP        string // 单出口节点出站源 IP；socks5 时表示连接上游代理的本机源 IP
 	OutboundProxyURL  string // 单出口节点上游 socks5 地址
 	XHTTPPath         string // XHTTP 请求路径
 	XHTTPHost         string // XHTTP Host
@@ -149,6 +150,7 @@ func loadConfig() *Config {
 		cfg.NodeToken = plainToken
 		cfg.NodeTransport = normalizeAgentTransport(getEnv("NODE_TRANSPORT", "tcp"))
 		cfg.OutboundType = normalizeAgentOutboundType(getEnv("OUTBOUND_TYPE", "direct"))
+		cfg.OutboundIP = normalizeAgentOptionalIP(getEnv("OUTBOUND_IP", ""))
 		cfg.OutboundProxyURL = strings.TrimSpace(getEnv("OUTBOUND_PROXY_URL", ""))
 		cfg.XHTTPPath = normalizeAgentXHTTPPath(getEnv("XHTTP_PATH", ""))
 		cfg.XHTTPHost = strings.TrimSpace(getEnv("XHTTP_HOST", ""))
@@ -232,6 +234,7 @@ func loadMultiNodeConfig() ([]MultiExitNodeConfig, error) {
 		}
 		seenEndpoints[endpoint] = struct{}{}
 		nodes[i].Transport = normalizeAgentTransport(nodes[i].Transport)
+		nodes[i].OutboundIP = normalizeAgentOptionalIP(nodes[i].OutboundIP)
 		nodes[i].XHTTPPath = normalizeAgentXHTTPPath(nodes[i].XHTTPPath)
 		nodes[i].XHTTPHost = strings.TrimSpace(nodes[i].XHTTPHost)
 		nodes[i].XHTTPMode = normalizeAgentXHTTPMode(nodes[i].XHTTPMode)
@@ -286,6 +289,18 @@ func normalizeAgentOutboundType(value string) string {
 	}
 }
 
+func normalizeAgentOptionalIP(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.EqualFold(value, "auto") {
+		return ""
+	}
+	ip := net.ParseIP(value)
+	if ip == nil || ip.To4() == nil {
+		return ""
+	}
+	return ip.To4().String()
+}
+
 // MultiExitNodeConfig 是 multi_exit 模式下一个逻辑出口节点的本地配置。
 type MultiExitNodeConfig struct {
 	NodeID            uint64 `json:"node_id"`
@@ -293,6 +308,7 @@ type MultiExitNodeConfig struct {
 	Port              uint32 `json:"port"`
 	Transport         string `json:"transport"`
 	OutboundType      string `json:"outbound_type,omitempty"`
+	OutboundIP        string `json:"outbound_ip,omitempty"`
 	OutboundProxyURL  string `json:"outbound_proxy_url,omitempty"`
 	XHTTPPath         string `json:"xhttp_path,omitempty"`
 	XHTTPHost         string `json:"xhttp_host,omitempty"`
@@ -742,6 +758,7 @@ func (a *Agent) generateDefaultXrayConfig() error {
 		Port:             443,
 		Transport:        a.cfg.NodeTransport,
 		OutboundType:     a.cfg.OutboundType,
+		OutboundIP:       a.cfg.OutboundIP,
 		OutboundProxyURL: a.cfg.OutboundProxyURL,
 		XHTTPPath:        a.cfg.XHTTPPath,
 		XHTTPHost:        a.cfg.XHTTPHost,
@@ -987,7 +1004,11 @@ func buildNodeOutbound(node MultiExitNodeConfig) (map[string]interface{}, error)
 			"tag":      node.OutboundTag,
 			"protocol": "freedom",
 		}
-		if ip := strings.TrimSpace(node.IP); ip != "" && ip != "0.0.0.0" && ip != "::" {
+		sendThrough := strings.TrimSpace(node.OutboundIP)
+		if sendThrough == "" {
+			sendThrough = strings.TrimSpace(node.IP)
+		}
+		if ip := sendThrough; ip != "" && ip != "0.0.0.0" && ip != "::" {
 			outbound["sendThrough"] = ip
 		}
 		return outbound, nil
@@ -1030,6 +1051,9 @@ func buildSocks5Outbound(node MultiExitNodeConfig) (map[string]interface{}, erro
 				},
 			},
 		},
+	}
+	if ip := strings.TrimSpace(node.OutboundIP); ip != "" && ip != "0.0.0.0" && ip != "::" {
+		outbound["sendThrough"] = ip
 	}
 	if parsed.User != nil {
 		username := parsed.User.Username()
