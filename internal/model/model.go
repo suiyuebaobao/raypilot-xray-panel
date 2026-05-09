@@ -353,6 +353,7 @@ type Node struct {
 	ShortID              string     `gorm:"column:short_id;type:varchar(32)" json:"short_id"`
 	Fingerprint          string     `gorm:"column:fingerprint;type:varchar(32);default:chrome" json:"fingerprint"`
 	Flow                 string     `gorm:"column:flow;type:varchar(32);default:xtls-rprx-vision" json:"flow"`
+	UDPEnabled           bool       `gorm:"column:udp_enabled" json:"udp_enabled"`
 	LineMode             string     `gorm:"column:line_mode;type:varchar(32);default:direct_and_relay" json:"line_mode"`
 	XHTTPPath            string     `gorm:"column:xhttp_path;type:varchar(255)" json:"xhttp_path"`
 	XHTTPHost            string     `gorm:"column:xhttp_host;type:varchar(255)" json:"xhttp_host"`
@@ -393,6 +394,7 @@ type CreateNodeRequest struct {
 	Transports       []string `json:"transports" binding:"omitempty,dive,oneof=tcp xhttp"`
 	TrafficPool      string   `json:"traffic_pool" binding:"omitempty,oneof=normal residential"`
 	OutboundType     string   `json:"outbound_type" binding:"omitempty,oneof=direct socks5"`
+	UDPEnabled       *bool    `json:"udp_enabled"`
 	Host             string   `json:"host" binding:"required"`
 	Port             uint32   `json:"port" default:"443"`
 	TCPPort          uint32   `json:"tcp_port"`
@@ -422,6 +424,7 @@ type UpdateNodeRequest struct {
 	Transport        string `json:"transport" binding:"omitempty,oneof=tcp xhttp"`
 	TrafficPool      string `json:"traffic_pool" binding:"omitempty,oneof=normal residential"`
 	OutboundType     string `json:"outbound_type" binding:"omitempty,oneof=direct socks5"`
+	UDPEnabled       *bool  `json:"udp_enabled"`
 	Host             string `json:"host" binding:"required"`
 	Port             uint32 `json:"port"`
 	ServerName       string `json:"server_name"`

@@ -161,6 +161,7 @@ test('multiple SOCKS5 upstreams create independent residential subscription line
     for (const node of nodes) {
       expect(node.traffic_pool).toBe('residential')
       expect(node.outbound_type).toBe('socks5')
+      expect(node.udp_enabled).toBe(false)
       expect([proxyA, proxyB]).toContain(node.outbound_proxy_url)
       expect(node.line_mode).toBe('direct_only')
       expect(node.flow || '').toBe('')
@@ -245,6 +246,7 @@ test('multiple SOCKS5 upstreams create independent residential subscription line
     }
     expect(countOccurrences(clash, 'type: vless')).toBe(4)
     expect(countOccurrences(clash, 'network: xhttp')).toBe(2)
+    expect(countOccurrences(clash, 'udp: false')).toBe(4)
     expect(clash).toContain('xhttp-opts:')
     expect(clash).toContain('path: /home-xhttp')
     expect(clash).toContain('host: cdn.example.test')

@@ -142,6 +142,17 @@ func TestNormalizeDeployOutboundProxyURLs_MultipleLines(t *testing.T) {
 	}, values)
 }
 
+func TestNormalizeDeployUDPEnabled_DefaultsByOutboundType(t *testing.T) {
+	require.True(t, normalizeDeployUDPEnabled("direct", nil))
+	require.True(t, normalizeDeployUDPEnabled("", nil))
+	require.False(t, normalizeDeployUDPEnabled("socks5", nil))
+
+	enabled := true
+	disabled := false
+	require.True(t, normalizeDeployUDPEnabled("socks5", &enabled))
+	require.False(t, normalizeDeployUDPEnabled("direct", &disabled))
+}
+
 func TestNormalizeOptionalIPv4_AcceptsAutoAndIPv4(t *testing.T) {
 	require.Equal(t, "203.0.113.88", normalizeOptionalIPv4(" 203.0.113.88 "))
 	require.Empty(t, normalizeOptionalIPv4("auto"))

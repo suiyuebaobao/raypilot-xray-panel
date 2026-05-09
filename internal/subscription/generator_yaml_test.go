@@ -152,11 +152,40 @@ func TestGenerator_ClashYAML_Socks5ProxyOmitsFlow(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal([]byte(yamlContent), &config))
 	proxy := config["proxies"].([]interface{})[0].(map[string]interface{})
 	assert.Equal(t, "tcp", proxy["network"])
+	assert.False(t, proxy["udp"].(bool))
 	assert.NotContains(t, proxy, "flow")
 
 	uriContent := gen.GeneratePlainURI(nodes)
 	assert.Contains(t, uriContent, "type=tcp")
 	assert.NotContains(t, uriContent, "flow=")
+}
+
+func TestGenerator_ClashYAML_UDPEnabledCanOverrideSocks5Default(t *testing.T) {
+	_, gen := setupSubTestDB(t)
+	enabled := true
+
+	nodes := []subscription.NodeConfig{
+		{
+			Name:         "Home-UDP",
+			Server:       "home-udp.example.com",
+			Port:         24465,
+			UUID:         "uuid-home-udp",
+			ServerName:   "www.microsoft.com",
+			PublicKey:    "home-pubkey",
+			ShortID:      "home-sid",
+			Fingerprint:  "chrome",
+			Transport:    "tcp",
+			OutboundType: "socks5",
+			UDPEnabled:   &enabled,
+		},
+	}
+
+	yamlContent := gen.GenerateClashYAML(nodes)
+
+	var config map[string]interface{}
+	require.NoError(t, yaml.Unmarshal([]byte(yamlContent), &config))
+	proxy := config["proxies"].([]interface{})[0].(map[string]interface{})
+	assert.True(t, proxy["udp"].(bool))
 }
 
 // TestGenerator_ClashYAML_MultipleNodes 测试多节点生成。

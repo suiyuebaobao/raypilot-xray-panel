@@ -76,6 +76,7 @@ type DeployRequest struct {
 	NodeName            string   `json:"node_name"`
 	TrafficPool         string   `json:"traffic_pool"`
 	OutboundType        string   `json:"outbound_type"`
+	UDPEnabled          *bool    `json:"udp_enabled"`
 	OutboundIP          string   `json:"outbound_ip"`
 	OutboundProxyURL    string   `json:"outbound_proxy_url"`
 	Transport           string   `json:"transport"`
@@ -590,6 +591,7 @@ func (s *NodeDeployService) Deploy(ctx context.Context, req *DeployRequest) (*De
 		Protocol:       "vless",
 		TrafficPool:    model.NormalizeTrafficPool(req.TrafficPool),
 		OutboundType:   normalizeDeployOutboundType(req.OutboundType),
+		UDPEnabled:     normalizeDeployUDPEnabled(req.OutboundType, req.UDPEnabled),
 		Host:           req.SSHHost,
 		ServerName:     "www.microsoft.com",
 		LineMode:       "direct_and_relay",
@@ -853,6 +855,7 @@ func (s *NodeDeployService) deployMultiLine(ctx context.Context, req *DeployRequ
 					Protocol:       "vless",
 					TrafficPool:    model.NormalizeTrafficPool(req.TrafficPool),
 					OutboundType:   normalizeDeployOutboundType(req.OutboundType),
+					UDPEnabled:     normalizeDeployUDPEnabled(req.OutboundType, req.UDPEnabled),
 					Host:           ip,
 					ServerName:     "www.microsoft.com",
 					LineMode:       "direct_and_relay",
@@ -938,6 +941,13 @@ func normalizeDeployOutboundType(value string) string {
 		return model.NodeOutboundSocks5
 	}
 	return model.NodeOutboundDirect
+}
+
+func normalizeDeployUDPEnabled(outboundType string, udpEnabled *bool) bool {
+	if udpEnabled != nil {
+		return *udpEnabled
+	}
+	return normalizeDeployOutboundType(outboundType) != model.NodeOutboundSocks5
 }
 
 func normalizeOptionalIPv4(value string) string {

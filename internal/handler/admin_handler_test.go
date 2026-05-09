@@ -804,6 +804,46 @@ func TestAdminHandler_CreateNode_SavesSocks5Outbound(t *testing.T) {
 	assert.Equal(t, "203.0.113.240", data["outbound_ip"])
 	assert.Equal(t, "residential", data["traffic_pool"])
 	assert.Equal(t, "", data["flow"])
+	assert.Equal(t, false, data["udp_enabled"])
+}
+
+func TestAdminHandler_CreateNode_Socks5AllowsExplicitUDPEnabled(t *testing.T) {
+	r, adminToken := setupTestAdminApp(t)
+
+	body := map[string]interface{}{
+		"name":               "socks5-home-node-udp",
+		"protocol":           "vless",
+		"host":               "203.0.113.249",
+		"port":               24463,
+		"traffic_pool":       "residential",
+		"outbound_type":      "socks5",
+		"udp_enabled":        true,
+		"outbound_proxy_url": "socks5://user:pass@example.com:3010",
+		"transport":          "tcp",
+		"server_name":        "www.microsoft.com",
+		"public_key":         "test-public-key-home-udp-123456789012345",
+		"short_id":           "1a2b3c4d",
+		"fingerprint":        "chrome",
+		"line_mode":          "direct_only",
+		"agent_base_url":     "http://203.0.113.249:18080",
+		"agent_token":        "socks5-agent-token",
+		"is_enabled":         true,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/nodes", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(t, "socks5", data["outbound_type"])
+	assert.Equal(t, true, data["udp_enabled"])
 }
 
 func TestAdminHandler_CreateNode_MultipleSocks5CreatesMultipleLogicalNodes(t *testing.T) {
@@ -856,6 +896,7 @@ func TestAdminHandler_CreateNode_MultipleSocks5CreatesMultipleLogicalNodes(t *te
 		assert.Equal(t, "residential", node["traffic_pool"])
 		assert.Equal(t, "203.0.113.240", node["outbound_ip"])
 		assert.Equal(t, "", node["flow"])
+		assert.Equal(t, false, node["udp_enabled"])
 		if node["outbound_proxy_url"] != nil {
 			assert.Contains(t, node["outbound_proxy_url"].(string), "socks5://user")
 		}

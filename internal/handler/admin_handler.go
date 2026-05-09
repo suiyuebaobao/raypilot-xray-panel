@@ -830,6 +830,7 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 					Protocol:       req.Protocol,
 					TrafficPool:    model.NormalizeTrafficPool(req.TrafficPool),
 					OutboundType:   outboundType,
+					UDPEnabled:     normalizeNodeUDPEnabled(outboundType, req.UDPEnabled),
 					Host:           req.Host,
 					ServerName:     req.ServerName,
 					PublicKey:      req.PublicKey,
@@ -885,6 +886,7 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 		Protocol:         req.Protocol,
 		TrafficPool:      model.NormalizeTrafficPool(req.TrafficPool),
 		OutboundType:     normalizeNodeOutboundType(req.OutboundType),
+		UDPEnabled:       normalizeNodeUDPEnabled(req.OutboundType, req.UDPEnabled),
 		Host:             req.Host,
 		ServerName:       req.ServerName,
 		PublicKey:        req.PublicKey,
@@ -950,6 +952,7 @@ func (h *AdminNodeHandler) Update(c *gin.Context) {
 	if req.OutboundType != "" {
 		node.OutboundType = normalizeNodeOutboundType(req.OutboundType)
 	}
+	node.UDPEnabled = normalizeNodeUDPEnabled(node.OutboundType, req.UDPEnabled)
 	if req.Transport == "" {
 		req.Transport = node.Transport
 	}
@@ -1019,6 +1022,13 @@ func normalizeNodeOutboundType(value string) string {
 		return model.NodeOutboundSocks5
 	}
 	return model.NodeOutboundDirect
+}
+
+func normalizeNodeUDPEnabled(outboundType string, udpEnabled *bool) bool {
+	if udpEnabled != nil {
+		return *udpEnabled
+	}
+	return normalizeNodeOutboundType(outboundType) != model.NodeOutboundSocks5
 }
 
 // Delete 处理 DELETE /api/admin/nodes/:id — 删除节点。

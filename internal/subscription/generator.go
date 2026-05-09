@@ -277,6 +277,7 @@ type NodeConfig struct {
 	ShortID      string
 	Fingerprint  string
 	Flow         string
+	UDPEnabled   *bool
 	Transport    string
 	OutboundType string
 	XHTTPPath    string
@@ -295,6 +296,7 @@ func buildNodeConfigFromExitNode(node model.Node, uuid string, name string, serv
 		ShortID:      node.ShortID,
 		Fingerprint:  node.Fingerprint,
 		Flow:         node.Flow,
+		UDPEnabled:   boolPtr(node.UDPEnabled),
 		Transport:    node.Transport,
 		OutboundType: node.OutboundType,
 		XHTTPPath:    node.XHTTPPath,
@@ -344,6 +346,17 @@ func subscriptionFlowForNode(nc NodeConfig) string {
 	return flow
 }
 
+func subscriptionUDPForNode(nc NodeConfig) bool {
+	if nc.UDPEnabled != nil {
+		return *nc.UDPEnabled
+	}
+	return !strings.EqualFold(strings.TrimSpace(nc.OutboundType), model.NodeOutboundSocks5)
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
+
 func allowsDirectLine(lineMode string) bool {
 	switch lineMode {
 	case "relay_only":
@@ -390,7 +403,7 @@ func (g *Generator) generateClashYAML(nodes []NodeConfig) string {
 			"port":               nc.Port,
 			"uuid":               nc.UUID,
 			"network":            transport,
-			"udp":                true,
+			"udp":                subscriptionUDPForNode(nc),
 			"tls":                true,
 			"servername":         nc.ServerName,
 			"client-fingerprint": nc.Fingerprint,

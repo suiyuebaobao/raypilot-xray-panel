@@ -50,6 +50,7 @@
               <template #default="{ row: line }">
                 <div class="line-outbound">
                   <span>{{ line.outbound_type === 'socks5' ? 'SOCKS5' : '本机直连' }}</span>
+                  <small>UDP {{ line.udp_enabled ? '开启' : '关闭' }}</small>
                   <small v-if="line.outbound_ip">本机源 IP {{ line.outbound_ip }}</small>
                   <small v-if="line.outbound_proxy_url">{{ maskProxyUrl(line.outbound_proxy_url) }}</small>
                 </div>
@@ -148,10 +149,17 @@
           </el-select>
         </el-form-item>
         <el-form-item label="出站方式">
-          <el-select v-model="form.outbound_type" style="width: 100%">
+          <el-select v-model="form.outbound_type" style="width: 100%" @change="handleOutboundTypeChange(form)">
             <el-option label="本机直连" value="direct" />
             <el-option label="上游 SOCKS5" value="socks5" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="UDP">
+          <el-switch
+            v-model="form.udp_enabled"
+            active-text="订阅允许 UDP"
+            inactive-text="订阅禁用 UDP"
+          />
         </el-form-item>
         <el-form-item v-if="form.outbound_type === 'socks5'" label="上游代理 URL">
           <el-input
@@ -273,10 +281,17 @@
           </el-select>
         </el-form-item>
         <el-form-item label="出站方式">
-          <el-select v-model="deployForm.outbound_type" style="width: 100%">
+          <el-select v-model="deployForm.outbound_type" style="width: 100%" @change="handleOutboundTypeChange(deployForm)">
             <el-option label="本机直连" value="direct" />
             <el-option label="上游 SOCKS5" value="socks5" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="UDP">
+          <el-switch
+            v-model="deployForm.udp_enabled"
+            active-text="订阅允许 UDP"
+            inactive-text="订阅禁用 UDP"
+          />
         </el-form-item>
         <el-form-item v-if="deployForm.outbound_type === 'socks5'" label="上游代理 URL">
           <el-input
@@ -430,6 +445,7 @@
             <template #default="{ row }">
               <div class="line-outbound">
                 <span>{{ row.outbound_type === 'socks5' ? 'SOCKS5' : '本机直连' }}</span>
+                <small>UDP {{ row.udp_enabled ? '开启' : '关闭' }}</small>
                 <small v-if="row.outbound_ip">本机源 IP {{ row.outbound_ip }}</small>
                 <small v-if="row.outbound_proxy_url">{{ maskProxyUrl(row.outbound_proxy_url) }}</small>
               </div>
@@ -532,6 +548,7 @@ const form = reactive({
   host: '',
   traffic_pool: 'normal',
   outbound_type: 'direct',
+  udp_enabled: true,
   outbound_ip: '',
   outbound_proxy_url: '',
   transports: ['tcp'],
@@ -587,6 +604,7 @@ const deployForm = reactive({
   node_name: '',
   traffic_pool: 'normal',
   outbound_type: 'direct',
+  udp_enabled: true,
   outbound_ip: '',
   outbound_proxy_url: '',
   center_url: window.location.origin,
@@ -723,6 +741,7 @@ async function handleDeploy() {
       node_name: deployForm.node_name,
       traffic_pool: deployForm.traffic_pool,
       outbound_type: deployForm.outbound_type,
+      udp_enabled: deployForm.udp_enabled,
       outbound_ip: deployForm.outbound_ip,
       outbound_proxy_url: deployForm.outbound_proxy_url,
       center_url: deployForm.center_url,
@@ -796,6 +815,14 @@ function selectedTransports(target) {
 
 function hasTransport(target, transport) {
   return normalizedTransports(target).includes(transport)
+}
+
+function defaultUDPEnabled(outboundType) {
+  return outboundType !== 'socks5'
+}
+
+function handleOutboundTypeChange(target) {
+  target.udp_enabled = defaultUDPEnabled(target.outbound_type)
 }
 
 function handleTransportSelectionChange(target) {
@@ -946,6 +973,7 @@ function resetForm() {
   form.host = ''
   form.traffic_pool = 'normal'
   form.outbound_type = 'direct'
+  form.udp_enabled = true
   form.outbound_ip = ''
   form.outbound_proxy_url = ''
   form.transports = ['tcp']
@@ -980,6 +1008,7 @@ function prefillAddDialogFromServer(server, defaults = {}) {
   form.host = first.host || server.management_ip || ''
   form.traffic_pool = defaults.traffic_pool || 'normal'
   form.outbound_type = defaults.outbound_type || 'direct'
+  form.udp_enabled = defaults.udp_enabled ?? defaultUDPEnabled(form.outbound_type)
   form.outbound_ip = defaults.outbound_ip || (form.outbound_type === 'socks5' ? (server.ips?.[0] || '') : '')
   form.line_mode = defaults.line_mode || first.line_mode || 'direct_and_relay'
   form.agent_base_url = first.agent_base_url || ''
@@ -1000,6 +1029,7 @@ function showAddResidentialForServer(server) {
   prefillAddDialogFromServer(server, {
     traffic_pool: 'residential',
     outbound_type: 'socks5',
+    udp_enabled: false,
     line_mode: 'direct_only',
   })
 }
@@ -1008,6 +1038,7 @@ function showAddNormalForServer(server) {
   prefillAddDialogFromServer(server, {
     traffic_pool: 'normal',
     outbound_type: 'direct',
+    udp_enabled: true,
     line_mode: 'direct_and_relay',
   })
 }
@@ -1020,6 +1051,7 @@ function showEditDialog(row) {
   form.host = row.host
   form.traffic_pool = row.traffic_pool || 'normal'
   form.outbound_type = row.outbound_type || 'direct'
+  form.udp_enabled = row.udp_enabled ?? defaultUDPEnabled(form.outbound_type)
   form.outbound_ip = row.outbound_ip || ''
   form.outbound_proxy_url = row.outbound_proxy_url || ''
   form.transports = [row.transport || 'tcp']
@@ -1064,6 +1096,7 @@ async function handleSave() {
       host: form.host,
       traffic_pool: form.traffic_pool,
       outbound_type: form.outbound_type,
+      udp_enabled: form.udp_enabled,
       outbound_ip: form.outbound_ip,
       outbound_proxy_url: form.outbound_proxy_url,
       port: primaryTransport === 'xhttp' ? form.xhttp_port : form.tcp_port,

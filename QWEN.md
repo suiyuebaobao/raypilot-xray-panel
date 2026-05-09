@@ -140,6 +140,7 @@ suiyue/
 - `nodes.protocol` 表示 VLESS 等协议，`nodes.transport` 表示传输层；当前默认 `tcp`，可选 `xhttp`。
 - XHTTP 节点仍使用 VLESS + Reality，但必须清空 `flow`，不得给 Xray clients 或订阅写入 `xtls-rprx-vision`。
 - SOCKS5 家宽节点同样必须清空 `flow`，即使 `transport=tcp` 也不得给 Xray clients、节点同步 payload 或订阅写入 `xtls-rprx-vision`；普通直连 TCP 节点才默认使用 Vision flow。
+- `nodes.udp_enabled` 表示订阅侧 UDP 策略：Clash/mihomo YAML 必须按该字段输出 `udp`；SOCKS5 家宽节点默认 `false`，用于减少 QUIC/HTTP3 经二次转发导致的 Cloudflare 卡顿或风控，管理员可在新增、编辑和一键部署时显式开启。
 - XHTTP 参数由 `nodes.xhttp_path`、`nodes.xhttp_host`、`nodes.xhttp_mode` 管理；订阅输出必须包含 `network/type=xhttp` 和 XHTTP 参数。
 - 节点的 `traffic_pool` 与协议、传输层独立；同一物理服务器可同时部署普通池和家宽池逻辑节点。
 - 节点的 `outbound_type` 与 `traffic_pool` 独立；同一物理服务器可同时托管普通 IP 型节点和 SOCKS5 上游型家宽节点。

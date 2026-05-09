@@ -266,6 +266,7 @@ func sanitizeNodeDeployRequest(req *service.DeployRequest) map[string]interface{
 		"node_name":             req.NodeName,
 		"traffic_pool":          req.TrafficPool,
 		"outbound_type":         req.OutboundType,
+		"udp_enabled":           req.UDPEnabled,
 		"outbound_ip":           req.OutboundIP,
 		"outbound_proxy_count":  sanitizeOutboundProxyCount(req.OutboundType, req.OutboundProxyURL),
 		"transport":             req.Transport,
