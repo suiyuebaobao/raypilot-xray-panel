@@ -45,23 +45,23 @@
           <div class="usage-summary">
             <div class="usage-metric">
               <span>今日</span>
-              <strong>{{ formatBytes(usageData.summary?.today?.total) }}</strong>
-              <small>上行 {{ formatBytes(usageData.summary?.today?.upload) }} / 下行 {{ formatBytes(usageData.summary?.today?.download) }}</small>
+              <strong>{{ formatBytes(billedTotal(usageData.summary?.today)) }}</strong>
+              <small>实际 {{ formatBytes(usageData.summary?.today?.total) }}</small>
             </div>
             <div class="usage-metric">
               <span>本周</span>
-              <strong>{{ formatBytes(usageData.summary?.current_week?.total) }}</strong>
-              <small>上行 {{ formatBytes(usageData.summary?.current_week?.upload) }} / 下行 {{ formatBytes(usageData.summary?.current_week?.download) }}</small>
+              <strong>{{ formatBytes(billedTotal(usageData.summary?.current_week)) }}</strong>
+              <small>实际 {{ formatBytes(usageData.summary?.current_week?.total) }}</small>
             </div>
             <div class="usage-metric">
               <span>本月</span>
-              <strong>{{ formatBytes(usageData.summary?.current_month?.total) }}</strong>
-              <small>上行 {{ formatBytes(usageData.summary?.current_month?.upload) }} / 下行 {{ formatBytes(usageData.summary?.current_month?.download) }}</small>
+              <strong>{{ formatBytes(billedTotal(usageData.summary?.current_month)) }}</strong>
+              <small>实际 {{ formatBytes(usageData.summary?.current_month?.total) }}</small>
             </div>
             <div class="usage-metric">
               <span>截止今日</span>
-              <strong>{{ formatBytes(usageData.summary?.subscription_to_today?.total) }}</strong>
-              <small>{{ usageData.plan_name || '当前套餐' }}</small>
+              <strong>{{ formatBytes(billedTotal(usageData.summary?.subscription_to_today)) }}</strong>
+              <small>{{ usageData.plan_name || '当前套餐' }} / 实际 {{ formatBytes(usageData.summary?.subscription_to_today?.total) }}</small>
             </div>
           </div>
           <el-tabs v-model="usageTab">
@@ -76,6 +76,9 @@
                 </el-table-column>
                 <el-table-column label="合计">
                   <template #default="{ row }">{{ formatBytes(row.total) }}</template>
+                </el-table-column>
+                <el-table-column label="扣费">
+                  <template #default="{ row }">{{ formatBytes(billedTotal(row)) }}</template>
                 </el-table-column>
               </el-table>
             </el-tab-pane>
@@ -93,6 +96,9 @@
                 <el-table-column label="合计">
                   <template #default="{ row }">{{ formatBytes(row.total) }}</template>
                 </el-table-column>
+                <el-table-column label="扣费">
+                  <template #default="{ row }">{{ formatBytes(billedTotal(row)) }}</template>
+                </el-table-column>
               </el-table>
             </el-tab-pane>
             <el-tab-pane label="按月" name="monthly">
@@ -106,6 +112,9 @@
                 </el-table-column>
                 <el-table-column label="合计">
                   <template #default="{ row }">{{ formatBytes(row.total) }}</template>
+                </el-table-column>
+                <el-table-column label="扣费">
+                  <template #default="{ row }">{{ formatBytes(billedTotal(row)) }}</template>
                 </el-table-column>
               </el-table>
             </el-tab-pane>
@@ -204,6 +213,11 @@ function formatBytes(bytes) {
     i++
   }
   return val.toFixed(1) + ' ' + units[i]
+}
+
+function billedTotal(row) {
+  if (!row) return 0
+  return row.billed_total ?? row.billedTotal ?? row.delta_total ?? row.total ?? 0
 }
 
 function copyUrl(url) {

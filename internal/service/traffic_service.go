@@ -11,8 +11,10 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"suiyue/internal/model"
@@ -142,7 +144,7 @@ func (s *TrafficService) processSingleUser(ctx context.Context, nodeID uint64, i
 	// 4. 计算增量
 	deltaUp := calculateDelta(lastSnapshot.UplinkTotal, item.UplinkTotal)
 	deltaDown := calculateDelta(lastSnapshot.DownlinkTotal, item.DownlinkTotal)
-	deltaTotal := deltaUp + deltaDown
+	deltaTotal := addTraffic(deltaUp, deltaDown)
 
 	// 无论增量是否为 0，都要写入新快照（保持基线最新）
 	if err := s.db.WithContext(ctx).Create(&model.TrafficSnapshot{
@@ -162,16 +164,33 @@ func (s *TrafficService) processSingleUser(ctx context.Context, nodeID uint64, i
 	// 5. 事务：写入账本 + 原子累加订阅使用量 + 标记超限状态
 	var trigger *quotaTrigger
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		multiplier := 1.0
+		var plan model.Plan
+		if err := tx.Where("id = ? AND is_deleted = ?", sub.PlanID, false).First(&plan).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("find plan %d: %w", sub.PlanID, err)
+			}
+		} else {
+			multiplier = model.PlanTrafficMultiplierByPool(&plan, trafficPool)
+		}
+		billedUp := calculateBilledTraffic(deltaUp, multiplier)
+		billedDown := calculateBilledTraffic(deltaDown, multiplier)
+		billedTotal := addTraffic(billedUp, billedDown)
+
 		// 写入账本
 		if err := tx.Create(&model.UsageLedger{
-			UserID:         user.ID,
-			SubscriptionID: &sub.ID,
-			NodeID:         nodeID,
-			TrafficPool:    trafficPool,
-			DeltaUpload:    deltaUp,
-			DeltaDownload:  deltaDown,
-			DeltaTotal:     deltaTotal,
-			RecordedAt:     capturedAt,
+			UserID:            user.ID,
+			SubscriptionID:    &sub.ID,
+			NodeID:            nodeID,
+			TrafficPool:       trafficPool,
+			BillingMultiplier: multiplier,
+			DeltaUpload:       deltaUp,
+			BilledUpload:      billedUp,
+			DeltaDownload:     deltaDown,
+			BilledDownload:    billedDown,
+			DeltaTotal:        deltaTotal,
+			BilledTotal:       billedTotal,
+			RecordedAt:        capturedAt,
 		}).Error; err != nil {
 			return fmt.Errorf("create ledger: %w", err)
 		}
@@ -182,7 +201,7 @@ func (s *TrafficService) processSingleUser(ctx context.Context, nodeID uint64, i
 		}
 		if err := tx.Model(&model.UserSubscription{}).
 			Where("id = ?", sub.ID).
-			Update(column, gorm.Expr(column+" + ?", deltaTotal)).Error; err != nil {
+			Update(column, gorm.Expr(column+" + ?", billedTotal)).Error; err != nil {
 			return fmt.Errorf("update %s: %w", column, err)
 		}
 
@@ -222,6 +241,25 @@ func CalculateDelta(old, new uint64) uint64 {
 // calculateDelta 内部使用的增量计算方法。
 func calculateDelta(old, new uint64) uint64 {
 	return CalculateDelta(old, new)
+}
+
+func calculateBilledTraffic(value uint64, multiplier float64) uint64 {
+	if value == 0 {
+		return 0
+	}
+	multiplier = model.NormalizeTrafficMultiplier(multiplier)
+	billed := math.Ceil(float64(value) * multiplier)
+	if billed >= float64(^uint64(0)) {
+		return ^uint64(0)
+	}
+	return uint64(billed)
+}
+
+func addTraffic(a, b uint64) uint64 {
+	if ^uint64(0)-a < b {
+		return ^uint64(0)
+	}
+	return a + b
 }
 
 func (s *TrafficService) markOverQuotaTx(tx *gorm.DB, sub *model.UserSubscription, trafficPool string) (*quotaTrigger, error) {

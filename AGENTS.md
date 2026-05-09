@@ -54,6 +54,7 @@ Go 代码必须使用 `gofmt`。包名保持短小、全小写。测试命名优
 - 删除普通套餐时采用 `plans.is_deleted=true` 逻辑删除，不硬删订单或兑换码历史；仍在使用该套餐的活动订阅必须自动迁移到基础套餐，并触发出口节点用户同步。
 - 套餐列表、用户套餐选择、下单和兑换码开通不得使用 `is_deleted=true` 的套餐。
 - 套餐流量采用固定双池：`normal`（普通流量）与 `residential`（家宽流量）。`plans.traffic_limit` / `user_subscriptions.traffic_limit` / `user_subscriptions.used_traffic` 继续表示普通流量兼容字段，家宽流量使用独立字段维护。
+- 套餐支持双池扣费倍率：`plans.normal_traffic_multiplier` 作用于普通流量池，`plans.residential_traffic_multiplier` 作用于家宽流量池，默认均为 `1.000`。倍率只影响后续流量入账，不回溯历史账本。
 - 订阅超额判断必须按流量池分别处理：普通流量耗尽只影响普通节点，家宽流量耗尽只影响家宽节点，不能把两种流量混扣，也不能把一个池耗尽视为整个订阅失效。
 - 兑换码、管理员改订阅、基础套餐迁移和注册自动分配基础套餐时，必须同时维护普通流量和家宽流量字段；未显式设置家宽流量时默认 `0`。兑换码续费已有有效订阅时，必须同时叠加 `traffic_limit` 与 `residential_traffic_limit`，保留 `used_traffic` 与 `residential_used_traffic`，不能只叠加普通流量。
 
@@ -64,8 +65,8 @@ Go 代码必须使用 `gofmt`。包名保持短小、全小写。测试命名优
 - `nodes.outbound_ip` 语义按出站方式区分：直连节点表示该逻辑节点的真实本机出口 IP，并写入 Xray `freedom.sendThrough`；SOCKS5 家宽节点表示连接上游代理时使用的本机源 IP，并写入 Xray `socks.sendThrough`，不代表上游家宽最终出口 IP。
 - 家宽代理节点一条 `nodes` 记录只允许绑定一个上游 SOCKS5 账号；用户前台看到的是多条独立节点和多条订阅线路，而不是一个节点后面自动轮询多个家宽账号。
 - 如果管理员一次导入多条 SOCKS5，上层必须拆成多条逻辑 `nodes`，而不是把多条 SOCKS5 塞进一条节点记录。
-- `/api/agent/traffic` 与 `/api/agent/multi/traffic` 处理流量时，必须先读取节点 `traffic_pool`，再把增量流量记入对应订阅流量池。
-- `usage_ledgers` 必须记录流量池归属，便于区分普通流量和家宽流量账本。
+- `/api/agent/traffic` 与 `/api/agent/multi/traffic` 处理流量时，必须先读取节点 `traffic_pool`，再按当前套餐对应流量池倍率计算扣费流量，并把扣费流量记入对应订阅流量池。
+- `usage_ledgers` 必须同时记录真实流量与扣费流量：`delta_*` 表示节点实际上报增量，`billing_multiplier` 表示本次入账倍率，`billed_*` 表示实际扣费量，便于区分普通流量和家宽流量账本。
 - 订阅生成时必须按节点流量池过滤：某个流量池剩余为 0 时，该池节点和对应中转线路不得继续出现在订阅里；另一个池有剩余时仍可继续下发。
 - 节点用户同步必须支持按流量池下发。普通流量超额只能对普通池节点下发 `DISABLE_USER`，家宽流量超额只能对家宽池节点下发 `DISABLE_USER`。
 - 后台和用户侧展示必须同时展示普通流量与家宽流量；旧字段继续展示普通流量，新增结构用于展示完整双池信息。

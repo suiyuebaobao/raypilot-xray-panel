@@ -329,11 +329,14 @@ func TestAdminHandler_CreatePlan_Success(t *testing.T) {
 	r, adminToken := setupTestAdminApp(t)
 
 	body := map[string]interface{}{
-		"name":          "月付 200G",
-		"price":         12.00,
-		"traffic_limit": 214748364800,
-		"duration_days": 30,
-		"is_active":     true,
+		"name":                           "月付 200G",
+		"price":                          12.00,
+		"traffic_limit":                  214748364800,
+		"residential_traffic_limit":      107374182400,
+		"normal_traffic_multiplier":      2.5,
+		"residential_traffic_multiplier": 4,
+		"duration_days":                  30,
+		"is_active":                      true,
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -352,6 +355,8 @@ func TestAdminHandler_CreatePlan_Success(t *testing.T) {
 	assert.True(t, resp["success"].(bool))
 	data := resp["data"].(map[string]interface{})
 	assert.Equal(t, "月付 200G", data["name"])
+	assert.Equal(t, float64(2.5), data["normal_traffic_multiplier"])
+	assert.Equal(t, float64(4), data["residential_traffic_multiplier"])
 }
 
 // TestAdminHandler_ListPlans 测试套餐列表。
@@ -611,7 +616,7 @@ func TestAdminHandler_UpdatePlan(t *testing.T) {
 	require.Equal(t, http.StatusOK, createW.Code)
 
 	// 更新
-	updateBody := map[string]interface{}{"name": "updated-plan", "price": 20.0, "traffic_limit": 1000, "duration_days": 60, "is_active": true}
+	updateBody := map[string]interface{}{"name": "updated-plan", "price": 20.0, "traffic_limit": 1000, "normal_traffic_multiplier": 5, "residential_traffic_multiplier": 6, "duration_days": 60, "is_active": true}
 	updateJSON, _ := json.Marshal(updateBody)
 	updateReq := httptest.NewRequest(http.MethodPut, "/api/admin/plans/1", bytes.NewReader(updateJSON))
 	updateReq.Header.Set("Authorization", "Bearer "+token)
@@ -620,6 +625,11 @@ func TestAdminHandler_UpdatePlan(t *testing.T) {
 	r.ServeHTTP(updateW, updateReq)
 
 	assert.Equal(t, http.StatusOK, updateW.Code)
+	var updateResp map[string]interface{}
+	require.NoError(t, json.Unmarshal(updateW.Body.Bytes(), &updateResp))
+	updateData := updateResp["data"].(map[string]interface{})
+	assert.Equal(t, float64(5), updateData["normal_traffic_multiplier"])
+	assert.Equal(t, float64(6), updateData["residential_traffic_multiplier"])
 }
 
 // TestAdminHandler_DeletePlan 测试删除套餐。
@@ -1620,8 +1630,8 @@ func TestUsageHandler_AdminUserUsage(t *testing.T) {
 	tomorrowStart := todayStart.AddDate(0, 0, 1)
 	today := now.Add(tomorrowStart.Sub(now) / 2)
 	yesterday := todayStart.AddDate(0, 0, -1).Add(3 * time.Hour)
-	require.NoError(t, db.Create(&model.UsageLedger{UserID: user.ID, SubscriptionID: &subID, NodeID: node.ID, DeltaUpload: 100, DeltaDownload: 200, DeltaTotal: 300, RecordedAt: today}).Error)
-	require.NoError(t, db.Create(&model.UsageLedger{UserID: user.ID, SubscriptionID: &subID, NodeID: node.ID, DeltaUpload: 50, DeltaDownload: 250, DeltaTotal: 300, RecordedAt: yesterday}).Error)
+	require.NoError(t, db.Create(&model.UsageLedger{UserID: user.ID, SubscriptionID: &subID, NodeID: node.ID, BillingMultiplier: 2, DeltaUpload: 100, BilledUpload: 200, DeltaDownload: 200, BilledDownload: 400, DeltaTotal: 300, BilledTotal: 600, RecordedAt: today}).Error)
+	require.NoError(t, db.Create(&model.UsageLedger{UserID: user.ID, SubscriptionID: &subID, NodeID: node.ID, BillingMultiplier: 1, DeltaUpload: 50, BilledUpload: 50, DeltaDownload: 250, BilledDownload: 250, DeltaTotal: 300, BilledTotal: 300, RecordedAt: yesterday}).Error)
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/admin/users/%d/usage?days=7&weeks=4&months=3&recent=10", user.ID), nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
@@ -1643,8 +1653,10 @@ func TestUsageHandler_AdminUserUsage(t *testing.T) {
 	summary := data["summary"].(map[string]interface{})
 	todaySummary := summary["today"].(map[string]interface{})
 	assert.Equal(t, float64(300), todaySummary["total"])
+	assert.Equal(t, float64(600), todaySummary["billed_total"])
 	toToday := summary["subscription_to_today"].(map[string]interface{})
 	assert.Equal(t, float64(600), toToday["total"])
+	assert.Equal(t, float64(900), toToday["billed_total"])
 	allTimeToToday := summary["all_time_to_today"].(map[string]interface{})
 	assert.Equal(t, float64(600), allTimeToToday["total"])
 	recent := data["recent"].([]interface{})

@@ -5,6 +5,7 @@
 package model
 
 import (
+	"math"
 	"strings"
 	"time"
 )
@@ -40,6 +41,23 @@ func PlanTrafficLimitByPool(plan *Plan, pool string) uint64 {
 		return plan.ResidentialTrafficLimit
 	}
 	return plan.TrafficLimit
+}
+
+func NormalizeTrafficMultiplier(multiplier float64) float64 {
+	if multiplier <= 0 || math.IsNaN(multiplier) || math.IsInf(multiplier, 0) {
+		return 1
+	}
+	return multiplier
+}
+
+func PlanTrafficMultiplierByPool(plan *Plan, pool string) float64 {
+	if plan == nil {
+		return 1
+	}
+	if NormalizeTrafficPool(pool) == TrafficPoolResidential {
+		return NormalizeTrafficMultiplier(plan.ResidentialTrafficMultiplier)
+	}
+	return NormalizeTrafficMultiplier(plan.NormalTrafficMultiplier)
 }
 
 func SubscriptionTrafficLimitByPool(sub *UserSubscription, pool string) uint64 {
@@ -226,19 +244,21 @@ func (RefreshToken) TableName() string {
 
 // Plan 套餐模型。
 type Plan struct {
-	ID                      uint64    `gorm:"primaryKey;column:id" json:"id"`
-	Name                    string    `gorm:"column:name;type:varchar(128)" json:"name"`
-	Price                   float64   `gorm:"column:price;type:decimal(10,2)" json:"price"`
-	Currency                string    `gorm:"column:currency;type:varchar(8);default:USDT" json:"currency"`
-	TrafficLimit            uint64    `gorm:"column:traffic_limit" json:"traffic_limit"`
-	ResidentialTrafficLimit uint64    `gorm:"column:residential_traffic_limit" json:"residential_traffic_limit"`
-	DurationDays            uint32    `gorm:"column:duration_days" json:"duration_days"`
-	SortWeight              int       `gorm:"column:sort_weight;default:0" json:"sort_weight"`
-	IsActive                bool      `gorm:"column:is_active;default:true;index" json:"is_active"`
-	IsDefault               bool      `gorm:"column:is_default;default:false;index" json:"is_default"`
-	IsDeleted               bool      `gorm:"column:is_deleted;default:false;index" json:"is_deleted"`
-	CreatedAt               time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt               time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	ID                           uint64    `gorm:"primaryKey;column:id" json:"id"`
+	Name                         string    `gorm:"column:name;type:varchar(128)" json:"name"`
+	Price                        float64   `gorm:"column:price;type:decimal(10,2)" json:"price"`
+	Currency                     string    `gorm:"column:currency;type:varchar(8);default:USDT" json:"currency"`
+	TrafficLimit                 uint64    `gorm:"column:traffic_limit" json:"traffic_limit"`
+	ResidentialTrafficLimit      uint64    `gorm:"column:residential_traffic_limit" json:"residential_traffic_limit"`
+	NormalTrafficMultiplier      float64   `gorm:"column:normal_traffic_multiplier;type:decimal(8,3);default:1" json:"normal_traffic_multiplier"`
+	ResidentialTrafficMultiplier float64   `gorm:"column:residential_traffic_multiplier;type:decimal(8,3);default:1" json:"residential_traffic_multiplier"`
+	DurationDays                 uint32    `gorm:"column:duration_days" json:"duration_days"`
+	SortWeight                   int       `gorm:"column:sort_weight;default:0" json:"sort_weight"`
+	IsActive                     bool      `gorm:"column:is_active;default:true;index" json:"is_active"`
+	IsDefault                    bool      `gorm:"column:is_default;default:false;index" json:"is_default"`
+	IsDeleted                    bool      `gorm:"column:is_deleted;default:false;index" json:"is_deleted"`
+	CreatedAt                    time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt                    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
 // TableName 指定表名。
@@ -248,26 +268,30 @@ func (Plan) TableName() string {
 
 // CreatePlanRequest 创建套餐请求。
 type CreatePlanRequest struct {
-	Name                    string  `json:"name" binding:"required"`
-	Price                   float64 `json:"price" binding:"required,min=0"`
-	Currency                string  `json:"currency" default:"USDT"`
-	TrafficLimit            uint64  `json:"traffic_limit" binding:"min=0"`
-	ResidentialTrafficLimit uint64  `json:"residential_traffic_limit" binding:"min=0"`
-	DurationDays            uint32  `json:"duration_days" binding:"min=0"`
-	SortWeight              int     `json:"sort_weight"`
-	IsActive                bool    `json:"is_active"`
+	Name                         string  `json:"name" binding:"required"`
+	Price                        float64 `json:"price" binding:"required,min=0"`
+	Currency                     string  `json:"currency" default:"USDT"`
+	TrafficLimit                 uint64  `json:"traffic_limit" binding:"min=0"`
+	ResidentialTrafficLimit      uint64  `json:"residential_traffic_limit" binding:"min=0"`
+	NormalTrafficMultiplier      float64 `json:"normal_traffic_multiplier" binding:"omitempty,min=0.001"`
+	ResidentialTrafficMultiplier float64 `json:"residential_traffic_multiplier" binding:"omitempty,min=0.001"`
+	DurationDays                 uint32  `json:"duration_days" binding:"min=0"`
+	SortWeight                   int     `json:"sort_weight"`
+	IsActive                     bool    `json:"is_active"`
 }
 
 // UpdatePlanRequest 更新套餐请求。
 type UpdatePlanRequest struct {
-	Name                    string  `json:"name" binding:"required"`
-	Price                   float64 `json:"price" binding:"required,min=0"`
-	Currency                string  `json:"currency"`
-	TrafficLimit            uint64  `json:"traffic_limit" binding:"min=0"`
-	ResidentialTrafficLimit uint64  `json:"residential_traffic_limit" binding:"min=0"`
-	DurationDays            uint32  `json:"duration_days" binding:"min=0"`
-	SortWeight              int     `json:"sort_weight"`
-	IsActive                bool    `json:"is_active"`
+	Name                         string  `json:"name" binding:"required"`
+	Price                        float64 `json:"price" binding:"required,min=0"`
+	Currency                     string  `json:"currency"`
+	TrafficLimit                 uint64  `json:"traffic_limit" binding:"min=0"`
+	ResidentialTrafficLimit      uint64  `json:"residential_traffic_limit" binding:"min=0"`
+	NormalTrafficMultiplier      float64 `json:"normal_traffic_multiplier" binding:"omitempty,min=0.001"`
+	ResidentialTrafficMultiplier float64 `json:"residential_traffic_multiplier" binding:"omitempty,min=0.001"`
+	DurationDays                 uint32  `json:"duration_days" binding:"min=0"`
+	SortWeight                   int     `json:"sort_weight"`
+	IsActive                     bool    `json:"is_active"`
 }
 
 // NodeGroup 节点分组模型。
@@ -731,15 +755,19 @@ func (TrafficSnapshot) TableName() string {
 
 // UsageLedger 流量账本模型。
 type UsageLedger struct {
-	ID             uint64    `gorm:"primaryKey;column:id" json:"id"`
-	UserID         uint64    `gorm:"column:user_id;index" json:"user_id"`
-	SubscriptionID *uint64   `gorm:"column:subscription_id;index" json:"subscription_id"`
-	NodeID         uint64    `gorm:"column:node_id" json:"node_id"`
-	TrafficPool    string    `gorm:"column:traffic_pool;type:varchar(32);default:normal" json:"traffic_pool"`
-	DeltaUpload    uint64    `gorm:"column:delta_upload" json:"delta_upload"`
-	DeltaDownload  uint64    `gorm:"column:delta_download" json:"delta_download"`
-	DeltaTotal     uint64    `gorm:"column:delta_total" json:"delta_total"`
-	RecordedAt     time.Time `gorm:"column:recorded_at;index" json:"recorded_at"`
+	ID                uint64    `gorm:"primaryKey;column:id" json:"id"`
+	UserID            uint64    `gorm:"column:user_id;index" json:"user_id"`
+	SubscriptionID    *uint64   `gorm:"column:subscription_id;index" json:"subscription_id"`
+	NodeID            uint64    `gorm:"column:node_id" json:"node_id"`
+	TrafficPool       string    `gorm:"column:traffic_pool;type:varchar(32);default:normal" json:"traffic_pool"`
+	BillingMultiplier float64   `gorm:"column:billing_multiplier;type:decimal(8,3);default:1" json:"billing_multiplier"`
+	DeltaUpload       uint64    `gorm:"column:delta_upload" json:"delta_upload"`
+	BilledUpload      uint64    `gorm:"column:billed_upload" json:"billed_upload"`
+	DeltaDownload     uint64    `gorm:"column:delta_download" json:"delta_download"`
+	BilledDownload    uint64    `gorm:"column:billed_download" json:"billed_download"`
+	DeltaTotal        uint64    `gorm:"column:delta_total" json:"delta_total"`
+	BilledTotal       uint64    `gorm:"column:billed_total" json:"billed_total"`
+	RecordedAt        time.Time `gorm:"column:recorded_at;index" json:"recorded_at"`
 }
 
 // TableName 指定表名。

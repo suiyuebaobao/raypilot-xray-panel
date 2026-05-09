@@ -1003,6 +1003,7 @@ func (r *PlanRepository) ListActive(ctx context.Context) ([]model.Plan, error) {
 
 // Create 创建套餐。
 func (r *PlanRepository) Create(ctx context.Context, plan *model.Plan) (*model.Plan, error) {
+	normalizePlanMultipliers(plan)
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if plan.IsDefault {
 			if err := tx.Model(&model.Plan{}).Where("is_default = ?", true).Update("is_default", false).Error; err != nil {
@@ -1018,6 +1019,7 @@ func (r *PlanRepository) Create(ctx context.Context, plan *model.Plan) (*model.P
 
 // Update 更新套餐。
 func (r *PlanRepository) Update(ctx context.Context, plan *model.Plan) error {
+	normalizePlanMultipliers(plan)
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if plan.IsDefault {
 			plan.IsActive = true
@@ -1196,21 +1198,31 @@ func ensureDefaultPlanTxExcept(tx *gorm.DB, excludeID uint64) (*model.Plan, erro
 	}
 
 	plan := &model.Plan{
-		Name:                    defaultPlanName,
-		Price:                   0,
-		Currency:                "USDT",
-		TrafficLimit:            0,
-		ResidentialTrafficLimit: 0,
-		DurationDays:            defaultPlanDurationDays,
-		SortWeight:              -1000,
-		IsActive:                true,
-		IsDefault:               true,
-		IsDeleted:               false,
+		Name:                         defaultPlanName,
+		Price:                        0,
+		Currency:                     "USDT",
+		TrafficLimit:                 0,
+		ResidentialTrafficLimit:      0,
+		NormalTrafficMultiplier:      1,
+		ResidentialTrafficMultiplier: 1,
+		DurationDays:                 defaultPlanDurationDays,
+		SortWeight:                   -1000,
+		IsActive:                     true,
+		IsDefault:                    true,
+		IsDeleted:                    false,
 	}
 	if err := tx.Create(plan).Error; err != nil {
 		return nil, err
 	}
 	return plan, nil
+}
+
+func normalizePlanMultipliers(plan *model.Plan) {
+	if plan == nil {
+		return
+	}
+	plan.NormalTrafficMultiplier = model.NormalizeTrafficMultiplier(plan.NormalTrafficMultiplier)
+	plan.ResidentialTrafficMultiplier = model.NormalizeTrafficMultiplier(plan.ResidentialTrafficMultiplier)
 }
 
 func createDefaultSubscriptionForUserTx(tx *gorm.DB, userID uint64, plan *model.Plan, now time.Time) (*model.UserSubscription, error) {
@@ -2594,22 +2606,30 @@ type UsageLedgerRepository struct {
 
 // UsageLedgerTotal 表示流量账本汇总。
 type UsageLedgerTotal struct {
-	Upload   uint64 `json:"upload"`
-	Download uint64 `json:"download"`
-	Total    uint64 `json:"total"`
+	Upload         uint64 `json:"upload"`
+	Download       uint64 `json:"download"`
+	Total          uint64 `json:"total"`
+	BilledUpload   uint64 `json:"billed_upload"`
+	BilledDownload uint64 `json:"billed_download"`
+	BilledTotal    uint64 `json:"billed_total"`
 }
 
 // UsageLedgerWithNode 表示带节点名称的流量账本记录。
 type UsageLedgerWithNode struct {
-	ID             uint64    `json:"id"`
-	UserID         uint64    `json:"user_id"`
-	SubscriptionID *uint64   `json:"subscription_id"`
-	NodeID         uint64    `json:"node_id"`
-	NodeName       *string   `json:"node_name,omitempty"`
-	DeltaUpload    uint64    `json:"delta_upload"`
-	DeltaDownload  uint64    `json:"delta_download"`
-	DeltaTotal     uint64    `json:"delta_total"`
-	RecordedAt     time.Time `json:"recorded_at"`
+	ID                uint64    `json:"id"`
+	UserID            uint64    `json:"user_id"`
+	SubscriptionID    *uint64   `json:"subscription_id"`
+	NodeID            uint64    `json:"node_id"`
+	NodeName          *string   `json:"node_name,omitempty"`
+	TrafficPool       string    `json:"traffic_pool"`
+	BillingMultiplier float64   `json:"billing_multiplier"`
+	DeltaUpload       uint64    `json:"delta_upload"`
+	BilledUpload      uint64    `json:"billed_upload"`
+	DeltaDownload     uint64    `json:"delta_download"`
+	BilledDownload    uint64    `json:"billed_download"`
+	DeltaTotal        uint64    `json:"delta_total"`
+	BilledTotal       uint64    `json:"billed_total"`
+	RecordedAt        time.Time `json:"recorded_at"`
 }
 
 // NewUsageLedgerRepository 创建流量账本 Repository。
@@ -2639,7 +2659,7 @@ func (r *UsageLedgerRepository) SumByUser(ctx context.Context, userID uint64, su
 	var total UsageLedgerTotal
 	q := r.db.WithContext(ctx).
 		Model(&model.UsageLedger{}).
-		Select("COALESCE(SUM(delta_upload), 0) AS upload, COALESCE(SUM(delta_download), 0) AS download, COALESCE(SUM(delta_total), 0) AS total").
+		Select("COALESCE(SUM(delta_upload), 0) AS upload, COALESCE(SUM(delta_download), 0) AS download, COALESCE(SUM(delta_total), 0) AS total, COALESCE(SUM(CASE WHEN billed_upload > 0 THEN billed_upload ELSE delta_upload END), 0) AS billed_upload, COALESCE(SUM(CASE WHEN billed_download > 0 THEN billed_download ELSE delta_download END), 0) AS billed_download, COALESCE(SUM(CASE WHEN billed_total > 0 THEN billed_total ELSE delta_total END), 0) AS billed_total").
 		Where("user_id = ?", userID)
 	if subscriptionID != nil {
 		q = q.Where("subscription_id = ?", *subscriptionID)
@@ -2662,7 +2682,7 @@ func (r *UsageLedgerRepository) RecentByUser(ctx context.Context, userID uint64,
 	var records []UsageLedgerWithNode
 	q := r.db.WithContext(ctx).
 		Table("usage_ledgers AS ul").
-		Select("ul.id, ul.user_id, ul.subscription_id, ul.node_id, nodes.name AS node_name, ul.delta_upload, ul.delta_download, ul.delta_total, ul.recorded_at").
+		Select("ul.id, ul.user_id, ul.subscription_id, ul.node_id, nodes.name AS node_name, ul.traffic_pool, ul.billing_multiplier, ul.delta_upload, CASE WHEN ul.billed_upload > 0 THEN ul.billed_upload ELSE ul.delta_upload END AS billed_upload, ul.delta_download, CASE WHEN ul.billed_download > 0 THEN ul.billed_download ELSE ul.delta_download END AS billed_download, ul.delta_total, CASE WHEN ul.billed_total > 0 THEN ul.billed_total ELSE ul.delta_total END AS billed_total, ul.recorded_at").
 		Joins("LEFT JOIN nodes ON nodes.id = ul.node_id").
 		Where("ul.user_id = ?", userID)
 	if subscriptionID != nil {

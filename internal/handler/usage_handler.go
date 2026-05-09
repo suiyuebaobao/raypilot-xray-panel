@@ -54,14 +54,17 @@ func (h *UsageHandler) GetAdminUserUsage(c *gin.Context) {
 }
 
 type usageBucket struct {
-	Date     string `json:"date,omitempty"`
-	Week     string `json:"week,omitempty"`
-	Month    string `json:"month,omitempty"`
-	StartAt  string `json:"start_at,omitempty"`
-	EndAt    string `json:"end_at,omitempty"`
-	Upload   uint64 `json:"upload"`
-	Download uint64 `json:"download"`
-	Total    uint64 `json:"total"`
+	Date           string `json:"date,omitempty"`
+	Week           string `json:"week,omitempty"`
+	Month          string `json:"month,omitempty"`
+	StartAt        string `json:"start_at,omitempty"`
+	EndAt          string `json:"end_at,omitempty"`
+	Upload         uint64 `json:"upload"`
+	Download       uint64 `json:"download"`
+	Total          uint64 `json:"total"`
+	BilledUpload   uint64 `json:"billed_upload"`
+	BilledDownload uint64 `json:"billed_download"`
+	BilledTotal    uint64 `json:"billed_total"`
 }
 
 func (h *UsageHandler) writeUsage(c *gin.Context, userID uint64, includeUser bool) {
@@ -302,6 +305,9 @@ func sumLedgersBetween(ledgers []model.UsageLedger, start, end time.Time) reposi
 		total.Upload += ledger.DeltaUpload
 		total.Download += ledger.DeltaDownload
 		total.Total += ledger.DeltaTotal
+		total.BilledUpload += ledgerBilledUpload(ledger)
+		total.BilledDownload += ledgerBilledDownload(ledger)
+		total.BilledTotal += ledgerBilledTotal(ledger)
 	}
 	return total
 }
@@ -310,4 +316,28 @@ func addLedgerToBucket(bucket *usageBucket, ledger model.UsageLedger) {
 	bucket.Upload += ledger.DeltaUpload
 	bucket.Download += ledger.DeltaDownload
 	bucket.Total += ledger.DeltaTotal
+	bucket.BilledUpload += ledgerBilledUpload(ledger)
+	bucket.BilledDownload += ledgerBilledDownload(ledger)
+	bucket.BilledTotal += ledgerBilledTotal(ledger)
+}
+
+func ledgerBilledUpload(ledger model.UsageLedger) uint64 {
+	if ledger.BilledUpload > 0 {
+		return ledger.BilledUpload
+	}
+	return ledger.DeltaUpload
+}
+
+func ledgerBilledDownload(ledger model.UsageLedger) uint64 {
+	if ledger.BilledDownload > 0 {
+		return ledger.BilledDownload
+	}
+	return ledger.DeltaDownload
+}
+
+func ledgerBilledTotal(ledger model.UsageLedger) uint64 {
+	if ledger.BilledTotal > 0 {
+		return ledger.BilledTotal
+	}
+	return ledger.DeltaTotal
 }

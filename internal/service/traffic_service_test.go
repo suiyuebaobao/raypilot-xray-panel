@@ -226,6 +226,121 @@ func TestProcessTrafficReport_WithBaseline(t *testing.T) {
 	assert.Equal(t, uint64(600), ledgers[0].DeltaDownload)
 }
 
+func TestProcessTrafficReport_NormalMultiplierUsesCurrentPlanRate(t *testing.T) {
+	db := setupTrafficOverQuotaDB(t)
+
+	node := &model.Node{
+		Name: "normal-multiplier-node", Protocol: "vless", Host: "nm.test",
+		Port: 443, AgentBaseURL: "http://nm:8080", AgentTokenHash: "hash",
+		TrafficPool: model.TrafficPoolNormal, IsEnabled: true,
+	}
+	require.NoError(t, db.Create(node).Error)
+
+	plan := &model.Plan{
+		Name: "normal-multiplier-plan", Price: 10, DurationDays: 30,
+		TrafficLimit: 100000, NormalTrafficMultiplier: 1, IsActive: true,
+	}
+	require.NoError(t, db.Create(plan).Error)
+	sub := &model.UserSubscription{
+		UserID: 1, PlanID: plan.ID, StartDate: time.Now(),
+		ExpireDate:   time.Now().AddDate(0, 0, 30),
+		TrafficLimit: 100000, UsedTraffic: 0, Status: "ACTIVE",
+	}
+	require.NoError(t, db.Create(sub).Error)
+	require.NoError(t, db.Create(&model.TrafficSnapshot{
+		NodeID: node.ID, XrayUserKey: "trafficuser@test.local",
+		UplinkTotal: 0, DownlinkTotal: 0, CapturedAt: time.Now().Add(-2 * time.Minute),
+	}).Error)
+
+	trafficSvc := service.NewTrafficService(db,
+		repository.NewTrafficSnapshotRepository(db),
+		repository.NewUsageLedgerRepository(db),
+		repository.NewSubscriptionRepository(db),
+		repository.NewNodeRepository(db),
+		repository.NewUserRepository(db),
+		nil,
+	)
+
+	err := trafficSvc.ProcessTrafficReportWithOptions(context.Background(), node.ID, []service.TrafficItem{
+		{XrayUserKey: "trafficuser@test.local", UplinkTotal: 100, DownlinkTotal: 200},
+	}, service.TrafficReportOptions{CollectedAt: time.Now()})
+	require.NoError(t, err)
+
+	require.NoError(t, db.Model(&model.Plan{}).Where("id = ?", plan.ID).Update("normal_traffic_multiplier", 5.0).Error)
+	err = trafficSvc.ProcessTrafficReportWithOptions(context.Background(), node.ID, []service.TrafficItem{
+		{XrayUserKey: "trafficuser@test.local", UplinkTotal: 200, DownlinkTotal: 300},
+	}, service.TrafficReportOptions{CollectedAt: time.Now().Add(time.Minute)})
+	require.NoError(t, err)
+
+	var ledgers []model.UsageLedger
+	require.NoError(t, db.Where("node_id = ?", node.ID).Order("id ASC").Find(&ledgers).Error)
+	require.Len(t, ledgers, 2)
+	assert.Equal(t, float64(1), ledgers[0].BillingMultiplier)
+	assert.Equal(t, uint64(300), ledgers[0].DeltaTotal)
+	assert.Equal(t, uint64(300), ledgers[0].BilledTotal)
+	assert.Equal(t, float64(5), ledgers[1].BillingMultiplier)
+	assert.Equal(t, uint64(200), ledgers[1].DeltaTotal)
+	assert.Equal(t, uint64(1000), ledgers[1].BilledTotal)
+
+	var updatedSub model.UserSubscription
+	require.NoError(t, db.First(&updatedSub, sub.ID).Error)
+	assert.Equal(t, uint64(1300), updatedSub.UsedTraffic)
+}
+
+func TestProcessTrafficReport_ResidentialMultiplierUpdatesResidentialPool(t *testing.T) {
+	db := setupTrafficOverQuotaDB(t)
+
+	node := &model.Node{
+		Name: "residential-multiplier-node", Protocol: "vless", Host: "rm.test",
+		Port: 443, AgentBaseURL: "http://rm:8080", AgentTokenHash: "hash",
+		TrafficPool: model.TrafficPoolResidential, IsEnabled: true,
+	}
+	require.NoError(t, db.Create(node).Error)
+
+	plan := &model.Plan{
+		Name: "residential-multiplier-plan", Price: 10, DurationDays: 30,
+		TrafficLimit: 100000, ResidentialTrafficLimit: 100000,
+		NormalTrafficMultiplier: 1, ResidentialTrafficMultiplier: 3, IsActive: true,
+	}
+	require.NoError(t, db.Create(plan).Error)
+	sub := &model.UserSubscription{
+		UserID: 1, PlanID: plan.ID, StartDate: time.Now(),
+		ExpireDate:   time.Now().AddDate(0, 0, 30),
+		TrafficLimit: 100000, ResidentialTrafficLimit: 100000, Status: "ACTIVE",
+	}
+	require.NoError(t, db.Create(sub).Error)
+	require.NoError(t, db.Create(&model.TrafficSnapshot{
+		NodeID: node.ID, XrayUserKey: "trafficuser@test.local",
+		UplinkTotal: 10, DownlinkTotal: 20, CapturedAt: time.Now().Add(-time.Minute),
+	}).Error)
+
+	trafficSvc := service.NewTrafficService(db,
+		repository.NewTrafficSnapshotRepository(db),
+		repository.NewUsageLedgerRepository(db),
+		repository.NewSubscriptionRepository(db),
+		repository.NewNodeRepository(db),
+		repository.NewUserRepository(db),
+		nil,
+	)
+
+	err := trafficSvc.ProcessTrafficReportWithOptions(context.Background(), node.ID, []service.TrafficItem{
+		{XrayUserKey: "trafficuser@test.local", UplinkTotal: 110, DownlinkTotal: 220},
+	}, service.TrafficReportOptions{CollectedAt: time.Now()})
+	require.NoError(t, err)
+
+	var ledger model.UsageLedger
+	require.NoError(t, db.Where("node_id = ?", node.ID).First(&ledger).Error)
+	assert.Equal(t, model.TrafficPoolResidential, ledger.TrafficPool)
+	assert.Equal(t, float64(3), ledger.BillingMultiplier)
+	assert.Equal(t, uint64(300), ledger.DeltaTotal)
+	assert.Equal(t, uint64(900), ledger.BilledTotal)
+
+	var updatedSub model.UserSubscription
+	require.NoError(t, db.First(&updatedSub, sub.ID).Error)
+	assert.Equal(t, uint64(0), updatedSub.UsedTraffic)
+	assert.Equal(t, uint64(900), updatedSub.ResidentialUsedTraffic)
+}
+
 // TestProcessTrafficReport_EmptyReport 测试空报告处理。
 func TestProcessTrafficReport_EmptyReport(t *testing.T) {
 	db := setupTrafficOverQuotaDB(t)

@@ -40,6 +40,12 @@
           <div>家宽 {{ formatBytes(row.residential_traffic_limit) }}</div>
         </template>
       </el-table-column>
+      <el-table-column label="扣费倍率" min-width="150">
+        <template #default="{ row }">
+          <div>普通 {{ formatMultiplier(row.normal_traffic_multiplier) }}</div>
+          <div>家宽 {{ formatMultiplier(row.residential_traffic_multiplier) }}</div>
+        </template>
+      </el-table-column>
       <el-table-column prop="duration_days" label="时长（天）" width="100" />
       <el-table-column prop="is_active" label="状态" width="80">
         <template #default="{ row }">
@@ -99,6 +105,12 @@
         </el-form-item>
         <el-form-item label="家宽流量（GB）" prop="residentialTrafficLimitGB">
           <el-input-number v-model="form.residentialTrafficLimitGB" :min="0" />
+        </el-form-item>
+        <el-form-item label="普通倍率" prop="normalTrafficMultiplier">
+          <el-input-number v-model="form.normalTrafficMultiplier" :min="0.001" :precision="3" :step="0.1" />
+        </el-form-item>
+        <el-form-item label="家宽倍率" prop="residentialTrafficMultiplier">
+          <el-input-number v-model="form.residentialTrafficMultiplier" :min="0.001" :precision="3" :step="0.1" />
         </el-form-item>
         <el-form-item label="时长（天）" prop="duration_days">
           <el-input-number v-model="form.duration_days" :min="1" />
@@ -171,6 +183,8 @@ const form = reactive({
   price: 0,
   trafficLimitGB: 0,
   residentialTrafficLimitGB: 0,
+  normalTrafficMultiplier: 1,
+  residentialTrafficMultiplier: 1,
   duration_days: 30,
   nodeGroupIds: [],
   is_active: true,
@@ -181,6 +195,8 @@ const rules = {
   name: [{ required: true, message: '请输入套餐名称', trigger: 'blur' }],
   price: [{ required: true, message: '请输入价格', trigger: 'blur' }],
   duration_days: [{ required: true, message: '请输入时长', trigger: 'blur' }],
+  normalTrafficMultiplier: [{ required: true, message: '请输入普通倍率', trigger: 'blur' }],
+  residentialTrafficMultiplier: [{ required: true, message: '请输入家宽倍率', trigger: 'blur' }],
 }
 
 function formatBytes(bytes) {
@@ -193,6 +209,11 @@ function formatBytes(bytes) {
     i++
   }
   return val.toFixed(1) + ' ' + units[i]
+}
+
+function formatMultiplier(value) {
+  const n = Number(value || 1)
+  return `${n.toFixed(3).replace(/\.?0+$/, '')}x`
 }
 
 function getPlanNodeGroups(row) {
@@ -211,6 +232,8 @@ function resetForm() {
   form.price = 0
   form.trafficLimitGB = 0
   form.residentialTrafficLimitGB = 0
+  form.normalTrafficMultiplier = 1
+  form.residentialTrafficMultiplier = 1
   form.duration_days = 30
   form.nodeGroupIds = []
   form.is_active = true
@@ -231,6 +254,8 @@ function showEditDialog(row) {
   form.price = row.price
   form.trafficLimitGB = Math.round(row.traffic_limit / 1024 / 1024 / 1024)
   form.residentialTrafficLimitGB = Math.round((row.residential_traffic_limit || 0) / 1024 / 1024 / 1024)
+  form.normalTrafficMultiplier = Number(row.normal_traffic_multiplier || 1)
+  form.residentialTrafficMultiplier = Number(row.residential_traffic_multiplier || 1)
   form.duration_days = row.duration_days
   form.nodeGroupIds = row.node_group_ids || []
   form.isDefault = !!row.is_default
@@ -249,6 +274,8 @@ async function handleSave() {
       price: form.price,
       traffic_limit: form.trafficLimitGB * 1024 * 1024 * 1024,
       residential_traffic_limit: form.residentialTrafficLimitGB * 1024 * 1024 * 1024,
+      normal_traffic_multiplier: form.normalTrafficMultiplier,
+      residential_traffic_multiplier: form.residentialTrafficMultiplier,
       duration_days: form.duration_days,
       is_active: form.is_active,
     }

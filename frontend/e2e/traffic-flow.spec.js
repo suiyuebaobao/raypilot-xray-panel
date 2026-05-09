@@ -113,11 +113,15 @@ async function expectUsage(request, adminToken, userId, expected) {
   const usage = await api(request, adminToken, 'get', `/api/admin/users/${userId}/usage`, {
     params: { days: 7, weeks: 4, months: 3, recent: 20 },
   })
+  const expectedBilled = expected.billedTotal ?? expected.total
   expect(usage.summary.subscription_to_today.upload).toBe(expected.upload)
   expect(usage.summary.subscription_to_today.download).toBe(expected.download)
   expect(usage.summary.subscription_to_today.total).toBe(expected.total)
+  expect(usage.summary.subscription_to_today.billed_total).toBe(expectedBilled)
   expect(usage.summary.today.total).toBe(expected.total)
+  expect(usage.summary.today.billed_total).toBe(expectedBilled)
   expect((usage.recent || []).reduce((sum, item) => sum + item.delta_total, 0)).toBe(expected.total)
+  expect((usage.recent || []).reduce((sum, item) => sum + item.billed_total, 0)).toBe(expectedBilled)
   return usage
 }
 
@@ -226,6 +230,8 @@ test('traffic accounting data flow is billed, deduped, reported, and visible in 
         price: 1,
         currency: 'USDT',
         traffic_limit: trafficLimit,
+        normal_traffic_multiplier: 1,
+        residential_traffic_multiplier: 1,
         duration_days: 7,
         sort_weight: 950,
         is_active: true,
@@ -255,6 +261,8 @@ test('traffic accounting data flow is billed, deduped, reported, and visible in 
         expire_date: futureISO(7),
         traffic_limit: trafficLimit,
         used_traffic: 0,
+        residential_traffic_limit: 0,
+        residential_used_traffic: 0,
         generate_token: true,
       },
     })
@@ -382,21 +390,38 @@ test('traffic accounting data flow is billed, deduped, reported, and visible in 
     await expect(page.getByText(`${prefix}-plan`).first()).toBeVisible()
     await expect(page.getByText(formatBytes(expected.total)).first()).toBeVisible()
 
+    const multiplierPlan = await api(request, adminToken, 'put', `/api/admin/plans/${created.planId}`, {
+      data: {
+        name: `${prefix}-plan`,
+        price: 1,
+        currency: 'USDT',
+        traffic_limit: trafficLimit,
+        normal_traffic_multiplier: 5,
+        residential_traffic_multiplier: 1,
+        duration_days: 7,
+        sort_weight: 950,
+        is_active: true,
+      },
+    })
+    expect(multiplierPlan.normal_traffic_multiplier).toBe(5)
+
     await agentApi(request, '/api/agent/traffic', {
       node_id: created.nodeId,
       token: agentToken,
       collected_at: isoAt(trafficBaseTime, 7),
       items: [{ xray_user_key: xrayUserKey, uplink_total: 610, downlink_total: 720 }],
     })
+    const billedBeforeMultiplierReport = expected.billedTotal ?? expected.total
     expected.upload += 500
     expected.download += 500
     expected.total += 1000
+    expected.billedTotal = billedBeforeMultiplierReport + 5000
     expect(expected.total).toBeGreaterThanOrEqual(trafficLimit)
     await expectUsage(request, adminToken, created.userId, expected)
 
     const overQuotaSub = await api(request, adminToken, 'get', `/api/admin/users/${created.userId}/subscription`)
     expect(overQuotaSub.subscription.status).toBe('ACTIVE')
-    expect(overQuotaSub.subscription.used_traffic).toBe(expected.total)
+    expect(overQuotaSub.subscription.used_traffic).toBe(expected.billedTotal)
 
     await agentApi(request, '/api/agent/traffic', {
       node_id: created.nodeId,
@@ -407,6 +432,7 @@ test('traffic accounting data flow is billed, deduped, reported, and visible in 
     expected.upload += 9390
     expected.download += 9280
     expected.total += 18670
+    expected.billedTotal += 93350
     await expectUsage(request, adminToken, created.userId, expected)
 
     const nodes = await api(request, adminToken, 'get', '/api/admin/nodes')

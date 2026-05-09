@@ -13,6 +13,8 @@
             <ul class="plan-features">
               <li>普通流量：{{ formatBytes(plan.traffic_limit) }}</li>
               <li>家宽流量：{{ formatBytes(plan.residential_traffic_limit) }}</li>
+              <li>普通倍率：{{ formatMultiplier(plan.normal_traffic_multiplier) }}</li>
+              <li>家宽倍率：{{ formatMultiplier(plan.residential_traffic_multiplier) }}</li>
               <li>时长：{{ plan.duration_days }} 天</li>
             </ul>
             <el-button type="primary" @click="handleBuy(plan)" style="width: 100%; margin-top: 12px">
@@ -49,6 +51,11 @@ function formatBytes(bytes) {
     i++
   }
   return val.toFixed(1) + ' ' + units[i]
+}
+
+function formatMultiplier(value) {
+  const n = Number(value || 1)
+  return `${n.toFixed(3).replace(/\.?0+$/, '')}x`
 }
 
 function handleBuy(plan) {

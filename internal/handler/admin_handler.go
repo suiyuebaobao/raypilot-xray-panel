@@ -121,14 +121,16 @@ func (h *AdminPlanHandler) Create(c *gin.Context) {
 	}
 
 	plan, err := h.planRepo.Create(c.Request.Context(), &model.Plan{
-		Name:                    req.Name,
-		Price:                   req.Price,
-		Currency:                req.Currency,
-		TrafficLimit:            req.TrafficLimit,
-		ResidentialTrafficLimit: req.ResidentialTrafficLimit,
-		DurationDays:            req.DurationDays,
-		SortWeight:              req.SortWeight,
-		IsActive:                req.IsActive,
+		Name:                         req.Name,
+		Price:                        req.Price,
+		Currency:                     req.Currency,
+		TrafficLimit:                 req.TrafficLimit,
+		ResidentialTrafficLimit:      req.ResidentialTrafficLimit,
+		NormalTrafficMultiplier:      model.NormalizeTrafficMultiplier(req.NormalTrafficMultiplier),
+		ResidentialTrafficMultiplier: model.NormalizeTrafficMultiplier(req.ResidentialTrafficMultiplier),
+		DurationDays:                 req.DurationDays,
+		SortWeight:                   req.SortWeight,
+		IsActive:                     req.IsActive,
 	})
 	if err != nil {
 		response.HandleError(c, response.ErrInternalServer)
@@ -168,6 +170,12 @@ func (h *AdminPlanHandler) Update(c *gin.Context) {
 	plan.Currency = req.Currency
 	plan.TrafficLimit = req.TrafficLimit
 	plan.ResidentialTrafficLimit = req.ResidentialTrafficLimit
+	if req.NormalTrafficMultiplier > 0 {
+		plan.NormalTrafficMultiplier = model.NormalizeTrafficMultiplier(req.NormalTrafficMultiplier)
+	}
+	if req.ResidentialTrafficMultiplier > 0 {
+		plan.ResidentialTrafficMultiplier = model.NormalizeTrafficMultiplier(req.ResidentialTrafficMultiplier)
+	}
 	plan.DurationDays = req.DurationDays
 	plan.SortWeight = req.SortWeight
 	plan.IsActive = req.IsActive
@@ -1920,15 +1928,17 @@ func subscriptionSummary(sub *model.UserSubscription) gin.H {
 
 func planSummary(plan *model.Plan) gin.H {
 	return gin.H{
-		"id":                        plan.ID,
-		"name":                      plan.Name,
-		"price":                     plan.Price,
-		"currency":                  plan.Currency,
-		"traffic_limit":             plan.TrafficLimit,
-		"residential_traffic_limit": plan.ResidentialTrafficLimit,
-		"traffic_pools":             planTrafficPools(plan),
-		"duration_days":             plan.DurationDays,
-		"is_active":                 plan.IsActive,
+		"id":                             plan.ID,
+		"name":                           plan.Name,
+		"price":                          plan.Price,
+		"currency":                       plan.Currency,
+		"traffic_limit":                  plan.TrafficLimit,
+		"residential_traffic_limit":      plan.ResidentialTrafficLimit,
+		"normal_traffic_multiplier":      plan.NormalTrafficMultiplier,
+		"residential_traffic_multiplier": plan.ResidentialTrafficMultiplier,
+		"traffic_pools":                  planTrafficPools(plan),
+		"duration_days":                  plan.DurationDays,
+		"is_active":                      plan.IsActive,
 	}
 }
 
@@ -1938,14 +1948,16 @@ func planTrafficPools(plan *model.Plan) []gin.H {
 	}
 	return []gin.H{
 		{
-			"code":          model.TrafficPoolNormal,
-			"name":          model.TrafficPoolDisplayName(model.TrafficPoolNormal),
-			"traffic_limit": plan.TrafficLimit,
+			"code":               model.TrafficPoolNormal,
+			"name":               model.TrafficPoolDisplayName(model.TrafficPoolNormal),
+			"traffic_limit":      plan.TrafficLimit,
+			"traffic_multiplier": model.PlanTrafficMultiplierByPool(plan, model.TrafficPoolNormal),
 		},
 		{
-			"code":          model.TrafficPoolResidential,
-			"name":          model.TrafficPoolDisplayName(model.TrafficPoolResidential),
-			"traffic_limit": plan.ResidentialTrafficLimit,
+			"code":               model.TrafficPoolResidential,
+			"name":               model.TrafficPoolDisplayName(model.TrafficPoolResidential),
+			"traffic_limit":      plan.ResidentialTrafficLimit,
+			"traffic_multiplier": model.PlanTrafficMultiplierByPool(plan, model.TrafficPoolResidential),
 		},
 	}
 }

@@ -159,12 +159,16 @@ test('admin CRUD APIs and subscription side effects work end to end', async ({ r
         price: 1.23,
         currency: 'USDT',
         traffic_limit: gb(5),
+        normal_traffic_multiplier: 1.5,
+        residential_traffic_multiplier: 2.5,
         duration_days: 7,
         sort_weight: 901,
         is_active: true,
       },
     })
     created.planCrudId = planCrud.id
+    expect(planCrud.normal_traffic_multiplier).toBe(1.5)
+    expect(planCrud.residential_traffic_multiplier).toBe(2.5)
 
     const updatedPlanCrud = await api(request, adminToken, 'put', `/api/admin/plans/${created.planCrudId}`, {
       data: {
@@ -172,12 +176,16 @@ test('admin CRUD APIs and subscription side effects work end to end', async ({ r
         price: 2.34,
         currency: 'USDT',
         traffic_limit: gb(6),
+        normal_traffic_multiplier: 3,
+        residential_traffic_multiplier: 4,
         duration_days: 8,
         sort_weight: 902,
         is_active: false,
       },
     })
     expect(updatedPlanCrud.name).toBe(`${prefix}-plan-crud-updated`)
+    expect(updatedPlanCrud.normal_traffic_multiplier).toBe(3)
+    expect(updatedPlanCrud.residential_traffic_multiplier).toBe(4)
 
     const planGroupBinding = await api(request, adminToken, 'post', `/api/admin/plans/${created.planCrudId}/node-groups`, {
       data: { node_group_ids: [created.groupId] },
@@ -236,6 +244,8 @@ test('admin CRUD APIs and subscription side effects work end to end', async ({ r
         price: 3.45,
         currency: 'USDT',
         traffic_limit: gb(8),
+        normal_traffic_multiplier: 1,
+        residential_traffic_multiplier: 1,
         duration_days: 15,
         sort_weight: 903,
         is_active: true,
