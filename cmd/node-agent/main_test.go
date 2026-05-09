@@ -469,6 +469,110 @@ func TestXrayStatValueUnmarshal_AcceptsNumberAndString(t *testing.T) {
 	}
 }
 
+func TestHandleDisableUser_RemovesTrafficStateAndQueuedItems(t *testing.T) {
+	configPath := writeAgentTestXrayConfig(t, map[string]interface{}{
+		"inbounds": []interface{}{
+			map[string]interface{}{
+				"protocol": "vless",
+				"settings": map[string]interface{}{
+					"clients": []interface{}{
+						map[string]interface{}{"id": "00000000-0000-0000-0000-000000000001", "email": "user@example.com"},
+					},
+					"decryption": "none",
+				},
+			},
+		},
+	})
+	queuePath := filepath.Join(t.TempDir(), "traffic_queue.json")
+	agent := NewAgent(&Config{
+		XrayConfigPath:    configPath,
+		XrayBinary:        "true",
+		TrafficQueuePath:  queuePath,
+		TrafficQueueLimit: 10,
+	})
+	agent.traffic["user@example.com"] = &TrafficItem{XrayUserKey: "user@example.com", UplinkTotal: 10}
+	agent.traffic["keep@example.com"] = &TrafficItem{XrayUserKey: "keep@example.com", UplinkTotal: 20}
+	agent.trafficQueue = []TrafficReportBatch{
+		{
+			CollectedAt: time.Now().UTC().Truncate(time.Second),
+			Items: []TrafficItem{
+				{XrayUserKey: "user@example.com", UplinkTotal: 10},
+				{XrayUserKey: "keep@example.com", UplinkTotal: 20},
+			},
+		},
+	}
+
+	errMsg := agent.handleDisableUser(`{"xray_user_key":"user@example.com"}`)
+	if errMsg != "" {
+		t.Fatalf("handleDisableUser returned %s", errMsg)
+	}
+	if _, ok := agent.traffic["user@example.com"]; ok {
+		t.Fatalf("removed user still exists in traffic map")
+	}
+	if _, ok := agent.traffic["keep@example.com"]; !ok {
+		t.Fatalf("unrelated user missing from traffic map")
+	}
+	if len(agent.trafficQueue) != 1 || len(agent.trafficQueue[0].Items) != 1 || agent.trafficQueue[0].Items[0].XrayUserKey != "keep@example.com" {
+		t.Fatalf("trafficQueue = %+v, want only keep@example.com", agent.trafficQueue)
+	}
+	raw, err := os.ReadFile(queuePath)
+	if err != nil {
+		t.Fatalf("read queue: %v", err)
+	}
+	if strings.Contains(string(raw), "user@example.com") {
+		t.Fatalf("queue file still contains removed user: %s", string(raw))
+	}
+}
+
+func TestHandleMultiDisableUser_RemovesLocalTrafficState(t *testing.T) {
+	configPath := writeAgentTestXrayConfig(t, buildMultiExitXrayConfigMap([]MultiExitNodeConfig{{
+		NodeID:            150,
+		IP:                "156.238.231.16",
+		Port:              443,
+		InboundTag:        "node_150_in",
+		OutboundTag:       "node_150_out",
+		XrayUserKeyPrefix: "node_150__",
+	}}, multiExitReality{
+		ServerName: "www.microsoft.com",
+		PublicKey:  "pub",
+		PrivateKey: "priv",
+		ShortID:    "",
+	}, nil, "127.0.0.1:10085"))
+	agent := NewAgent(&Config{
+		XrayConfigPath: configPath,
+		XrayBinary:     "true",
+		AgentRole:      "multi_exit",
+		MultiNodes: []MultiExitNodeConfig{{
+			NodeID:            150,
+			InboundTag:        "node_150_in",
+			XrayUserKeyPrefix: "node_150__",
+		}},
+	})
+	localKey := "node_150__user@example.com"
+	agent.traffic[localKey] = &TrafficItem{XrayUserKey: localKey, UplinkTotal: 10}
+
+	errMsg := agent.handleMultiDisableUser(150, `{"xray_user_key":"user@example.com"}`)
+	if errMsg != "" {
+		t.Fatalf("handleMultiDisableUser returned %s", errMsg)
+	}
+	if _, ok := agent.traffic[localKey]; ok {
+		t.Fatalf("removed local user still exists in traffic map")
+	}
+}
+
+func writeAgentTestXrayConfig(t *testing.T, cfg map[string]interface{}) string {
+	t.Helper()
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return configPath
+}
+
 func TestTrafficQueueFlush_MultiExitReportsNodeIDToMultiEndpoint(t *testing.T) {
 	var received []MultiTrafficReportReq
 	httpClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {

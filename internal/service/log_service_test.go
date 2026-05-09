@@ -101,6 +101,9 @@ func TestRuntimeLogService_Read_FiltersKeyword(t *testing.T) {
 
 func TestRuntimeLogService_Read_HourlyLogs(t *testing.T) {
 	logDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(logDir, "api"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(logDir, "api", "2026-05-09-02-00.log"), []byte("info flat old hour\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(logDir, "api", "2026-05-09-04-00.log"), []byte("debug flat current hour\n"), 0o600))
 	require.NoError(t, os.MkdirAll(filepath.Join(logDir, "api", "2026-05-09"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(logDir, "api", "2026-05-09", "03.log"), []byte("info old hour\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(logDir, "api", "2026-05-09", "04.log"), []byte("debug current hour\nerror current failed\n"), 0o600))
@@ -108,14 +111,15 @@ func TestRuntimeLogService_Read_HourlyLogs(t *testing.T) {
 	svc := service.NewRuntimeLogService(repository.NewRuntimeLogReader(logDir))
 	lines, err := svc.Read(context.Background(), "api", 100, "", "2026-05-09", "4")
 	require.NoError(t, err)
-	require.Len(t, lines, 2)
-	require.Equal(t, "api/2026-05-09/04.log", lines[0].File)
-	require.Contains(t, lines[1].Message, "current failed")
+	require.Len(t, lines, 3)
+	require.Equal(t, "api/2026-05-09-04-00.log", lines[0].File)
+	require.Equal(t, "api/2026-05-09/04.log", lines[1].File)
+	require.Contains(t, lines[2].Message, "current failed")
 
-	lines, err = svc.Read(context.Background(), "api", 100, "old", "2026-05-09", "")
+	lines, err = svc.Read(context.Background(), "api", 100, "flat old", "2026-05-09", "")
 	require.NoError(t, err)
 	require.Len(t, lines, 1)
-	require.Equal(t, "api/2026-05-09/03.log", lines[0].File)
+	require.Equal(t, "api/2026-05-09-02-00.log", lines[0].File)
 }
 
 func TestRuntimeLogService_Read_MissingFileReturnsEmpty(t *testing.T) {

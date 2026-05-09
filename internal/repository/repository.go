@@ -193,9 +193,12 @@ func (r *UserRepository) Delete(ctx context.Context, userID uint64) error {
 // FindByXrayUserKey 根据 xray_user_key 查找用户。
 func (r *UserRepository) FindByXrayUserKey(ctx context.Context, key string) (*model.User, error) {
 	var user model.User
-	err := r.db.WithContext(ctx).Where("xray_user_key = ?", key).First(&user).Error
-	if err != nil {
-		return nil, err
+	result := r.db.WithContext(ctx).Where("xray_user_key = ?", key).Limit(1).Find(&user)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &user, nil
 }
@@ -457,20 +460,33 @@ func (r *RuntimeLogReader) resolvePaths(source RuntimeLogSource, date, hour stri
 			if err != nil {
 				return nil, err
 			}
-			return []string{filepath.Join(r.baseDir, sourceName, normalizedDate, normalizedHour+".log")}, nil
+			return []string{
+				filepath.Join(r.baseDir, sourceName, normalizedDate+"-"+normalizedHour+"-00.log"),
+				filepath.Join(r.baseDir, sourceName, normalizedDate, normalizedHour+".log"),
+			}, nil
 		}
-		paths, err := filepath.Glob(filepath.Join(r.baseDir, sourceName, normalizedDate, "*.log"))
+		flatPaths, err := filepath.Glob(filepath.Join(r.baseDir, sourceName, normalizedDate+"-*.log"))
 		if err != nil {
 			return nil, err
 		}
+		nestedPaths, err := filepath.Glob(filepath.Join(r.baseDir, sourceName, normalizedDate, "*.log"))
+		if err != nil {
+			return nil, err
+		}
+		paths := append(flatPaths, nestedPaths...)
 		sort.Strings(paths)
 		return paths, nil
 	}
 
-	paths, err := filepath.Glob(filepath.Join(r.baseDir, sourceName, "*", "*.log"))
+	flatPaths, err := filepath.Glob(filepath.Join(r.baseDir, sourceName, "????-??-??-??-??.log"))
 	if err != nil {
 		return nil, err
 	}
+	nestedPaths, err := filepath.Glob(filepath.Join(r.baseDir, sourceName, "*", "*.log"))
+	if err != nil {
+		return nil, err
+	}
+	paths := append(flatPaths, nestedPaths...)
 	sort.Strings(paths)
 	if len(paths) > 24 {
 		paths = paths[len(paths)-24:]

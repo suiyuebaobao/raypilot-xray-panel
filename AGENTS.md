@@ -141,8 +141,8 @@ Go 代码必须使用 `gofmt`。包名保持短小、全小写。测试命名优
 ## 日志中心与审计规则
 
 - 日志中心 v1 已落地 `/admin/logs`、`/api/admin/logs/runtime`、`/api/admin/logs/deployments`、`/api/admin/logs/operations`，不是规划功能。
-- 运行日志读取宿主机按小时切分的 `logs/api/YYYY-MM-DD/HH.log` 与 `logs/worker/YYYY-MM-DD/HH.log`，后台接口必须限制最大返回行数并只允许管理员访问；旧版 `logs/api.log`、`logs/worker.log` 仅作为兼容读取。
-- Docker Compose 部署必须把宿主机 `./logs` 挂载到 API/Worker 容器 `/app/logs`，并通过 `deploy/scripts/hourly-log.sh` 写入按日期和小时切分的日志文件；日志文件尚未创建时，运行日志接口应返回空列表，不得 500。
+- 运行日志读取宿主机按小时切分的 `logs/api/YYYY-MM-DD-HH-00.log` 与 `logs/worker/YYYY-MM-DD-HH-00.log`，后台接口必须限制最大返回行数并只允许管理员访问；旧版 `logs/api/YYYY-MM-DD/HH.log`、`logs/worker/YYYY-MM-DD/HH.log`、`logs/api.log`、`logs/worker.log` 仅作为兼容读取。
+- Docker Compose 和 systemd 部署都必须通过 `deploy/scripts/hourly-log.sh` 写入按小时切分的日志文件；Compose 需把宿主机 `./logs` 挂载到 API/Worker 容器 `/app/logs`，systemd 需设置 `RAYPILOT_LOG_DIR=/root/suiyue/logs`。日志文件尚未创建时，运行日志接口应返回空列表，不得 500。
 - 操作日志必须记录用户注册、登录、退出、资料修改、密码修改、下单、兑换码兑换、订阅下载，以及管理员新增/删除/禁用用户、重置密码、修改订阅、生成兑换码等关键动作。
 - 部署日志必须记录一键部署出口节点和中转节点的结果、耗时、步骤明细、目标服务器 IP、操作者 IP、逻辑节点/中转/后端记录 ID。
 - 所有结构化日志必须记录可用 IP 信息：`client_ip` 或 `operator_ip`，并尽量保留 `X-Forwarded-For`、`X-Real-IP`、`User-Agent` 以便排障。

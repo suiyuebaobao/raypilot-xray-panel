@@ -8,6 +8,7 @@ package database
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"gorm.io/driver/mysql"
@@ -30,6 +31,12 @@ func New(dsn string, logLevel string) *gorm.DB {
 	default:
 		lvl = logger.Warn
 	}
+	gormLogger := logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{
+		SlowThreshold:             200 * time.Millisecond,
+		LogLevel:                  lvl,
+		IgnoreRecordNotFoundError: true,
+		Colorful:                  true,
+	})
 
 	var db *gorm.DB
 	var sqlDB interface {
@@ -43,7 +50,7 @@ func New(dsn string, logLevel string) *gorm.DB {
 
 	for attempt := 1; attempt <= 10; attempt++ {
 		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
-			Logger:                                   logger.Default.LogMode(lvl),
+			Logger:                                   gormLogger,
 			DisableForeignKeyConstraintWhenMigrating: false,
 		})
 		if err == nil {

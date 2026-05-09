@@ -31,11 +31,8 @@ mkfifo "$fifo"
 child_pid="$!"
 
 while IFS= read -r line; do
-  date_part="$(date '+%Y-%m-%d')"
-  hour_part="$(date '+%H')"
-  log_dir="$base_dir/$source_name/$date_part"
-  mkdir -p "$log_dir"
-  printf '%s\n' "$line" | tee -a "$log_dir/$hour_part.log"
+  log_file="$base_dir/$source_name/$(date '+%Y-%m-%d-%H-00').log"
+  printf '%s\n' "$line" | tee -a "$log_file"
 done <"$fifo"
 
 wait "$child_pid"

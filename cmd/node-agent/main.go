@@ -2108,6 +2108,7 @@ func (a *Agent) handleDisableUser(payload string) string {
 	if err := a.removeVLESSClient(p.XrayUserKey); err != nil {
 		return fmt.Sprintf("remove vless client failed: %v", err)
 	}
+	a.removeTrafficState(p.XrayUserKey)
 
 	return ""
 }
@@ -2123,10 +2124,52 @@ func (a *Agent) handleMultiDisableUser(nodeID uint64, payload string) string {
 	if !ok {
 		return fmt.Sprintf("unknown managed node_id: %d", nodeID)
 	}
-	if err := a.removeVLESSClientFromInbound(node.InboundTag, node.localXrayUserKey(p.XrayUserKey)); err != nil {
+	localKey := node.localXrayUserKey(p.XrayUserKey)
+	if err := a.removeVLESSClientFromInbound(node.InboundTag, localKey); err != nil {
 		return fmt.Sprintf("remove vless client failed: %v", err)
 	}
+	a.removeTrafficState(localKey)
 	return ""
+}
+
+func (a *Agent) removeTrafficState(xrayUserKey string) {
+	xrayUserKey = strings.TrimSpace(xrayUserKey)
+	if xrayUserKey == "" {
+		return
+	}
+
+	a.mu.Lock()
+	delete(a.traffic, xrayUserKey)
+	a.mu.Unlock()
+
+	a.queueMu.Lock()
+	changed := false
+	filteredBatches := a.trafficQueue[:0]
+	for _, batch := range a.trafficQueue {
+		filteredItems := batch.Items[:0]
+		for _, item := range batch.Items {
+			if item.XrayUserKey == xrayUserKey {
+				changed = true
+				continue
+			}
+			filteredItems = append(filteredItems, item)
+		}
+		if len(filteredItems) == 0 {
+			if len(batch.Items) > 0 {
+				changed = true
+			}
+			continue
+		}
+		batch.Items = append([]TrafficItem(nil), filteredItems...)
+		filteredBatches = append(filteredBatches, batch)
+	}
+	if changed {
+		a.trafficQueue = append([]TrafficReportBatch(nil), filteredBatches...)
+		a.saveTrafficQueueLocked()
+	}
+	a.queueMu.Unlock()
+
+	a.saveTrafficSnapshot()
 }
 
 // addVLESSClient 向 xray-core 配置文件添加 VLESS 用户。
