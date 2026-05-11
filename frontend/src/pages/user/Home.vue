@@ -40,7 +40,13 @@
               <el-descriptions-item label="家宽流量">{{ formatBytes(subscription.residential_used_traffic) }} / {{ formatBytes(subscription.residential_traffic_limit) }}</el-descriptions-item>
             </el-descriptions>
             <div class="progress-wrap">
-              <el-progress :percentage="trafficPercent" :color="trafficColor" />
+              <div v-for="pool in trafficPools" :key="pool.key" class="traffic-progress">
+                <div class="traffic-progress-head">
+                  <span>{{ pool.label }}进度</span>
+                  <small>{{ formatBytes(pool.used) }} / {{ formatBytes(pool.limit) }}</small>
+                </div>
+                <el-progress :percentage="pool.percent" :color="trafficColor(pool.percent)" />
+              </div>
             </div>
             <!-- 订阅链接快速复制 -->
             <div v-if="subscription.tokens?.length > 0" class="sub-quick-link">
@@ -89,7 +95,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { userApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 
 const userStore = useUserStore()
 const subscription = ref(null)
@@ -104,16 +110,38 @@ const subscriptionFormats = [
 
 const quickFormatLabel = computed(() => subscriptionFormats.find((item) => item.value === quickFormat.value)?.label || 'Clash')
 
-const trafficPercent = computed(() => {
-  if (!subscription.value || !subscription.value.traffic_limit) return 0
-  return Math.round((subscription.value.used_traffic / subscription.value.traffic_limit) * 100)
+const trafficPools = computed(() => {
+  if (!subscription.value) return []
+  return [
+    {
+      key: 'normal',
+      label: '普通流量',
+      used: subscription.value.used_traffic || 0,
+      limit: subscription.value.traffic_limit || 0,
+    },
+    {
+      key: 'residential',
+      label: '家宽流量',
+      used: subscription.value.residential_used_traffic || 0,
+      limit: subscription.value.residential_traffic_limit || 0,
+    },
+  ].map((pool) => ({
+    ...pool,
+    percent: trafficPercent(pool.used, pool.limit),
+  }))
 })
 
-const trafficColor = computed(() => {
-  if (trafficPercent.value > 90) return '#f56c6c'
-  if (trafficPercent.value > 70) return '#e6a23c'
-  return '#409eff'
-})
+function trafficPercent(used, limit) {
+  const total = Number(limit || 0)
+  if (!total) return 0
+  return Math.min(100, Math.round((Number(used || 0) / total) * 100))
+}
+
+function trafficColor(percent) {
+  if (percent > 90) return '#f56c6c'
+  if (percent > 70) return '#e6a23c'
+  return '#42f5ff'
+}
 
 const subTagType = computed(() => {
   switch (subscription.value?.status) {
@@ -190,15 +218,25 @@ function getSubscriptionUrl(format) {
 <style scoped>
 .home-page {
   padding: 20px;
-  background: #f5f7fa;
   min-height: calc(100vh - 60px);
 }
 .home-page h2 {
   margin-bottom: 20px;
-  color: #303133;
+  color: var(--rp-text);
 }
 .progress-wrap {
   margin-top: 12px;
+}
+.traffic-progress + .traffic-progress {
+  margin-top: 10px;
+}
+.traffic-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  color: var(--rp-muted);
+  font-size: 12px;
 }
 .sub-quick-link {
   margin-top: 12px;
@@ -208,7 +246,7 @@ function getSubscriptionUrl(format) {
 }
 .sub-quick-link .link-label {
   font-size: 13px;
-  color: #606266;
+  color: var(--rp-muted);
   margin-bottom: 6px;
 }
 .quick-actions {

@@ -30,6 +30,10 @@ export const redeemApi = {
   redeem: (payload) => httpPost('/api/redeem', payload),
 }
 
+export const siteApi = {
+  salesLanding: () => httpGet('/api/site/sales-landing', freshParams()),
+}
+
 export const adminApi = {
   dashboard: async () => {
     const res = await httpGet('/api/admin/dashboard/stats')
@@ -96,6 +100,10 @@ export const adminApi = {
     create: (payload) => httpPost('/api/admin/subscription-tokens', payload),
     revoke: (id) => httpPost(`/api/admin/subscription-tokens/${id}/revoke`),
     reset: (id, payload = {}) => httpPost(`/api/admin/subscription-tokens/${id}/reset`, payload),
+  },
+  site: {
+    salesLanding: () => httpGet('/api/admin/site/sales-landing', freshParams()),
+    updateSalesLanding: (payload) => httpPut('/api/admin/site/sales-landing', payload),
   },
   logs: {
     runtime: (params) => httpGet('/api/admin/logs/runtime', compact(params || {})),

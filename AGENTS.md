@@ -88,6 +88,7 @@ Go 代码必须使用 `gofmt`。包名保持短小、全小写。测试命名优
 - 节点的 `outbound_type` 与 `traffic_pool` 独立；同一物理服务器可同时托管普通 IP 型节点和 SOCKS5 上游型家宽节点。
 - 管理后台新增节点和一键部署允许多选传输模式；单选时仍创建一条 `nodes`，多选时按每种传输模式创建一条逻辑 `nodes` 线路。
 - 同一 IP 同时选择 TCP 与 XHTTP 时必须使用不同端口；默认 TCP 443、XHTTP 8443，不能在同一个 Xray inbound 上混用两种 network。
+- 端口冲突必须按监听端点 `listen_ip:port` 判定，不得只按端口全局去重；多 IP 服务器允许不同公网 IP 使用相同端口，例如 `IP-A:443` 与 `IP-B:443`，但同一 `listen_ip` 下不能有两条逻辑节点占用同一端口。管理 API 新增和编辑节点必须在后端校验同一 `node_host_id` 或同一 `agent_base_url` 下的监听端点，`0.0.0.0` / `::` 视为通配监听，不能只依赖前端提示。
 - 修改 XHTTP 字段、订阅格式、Xray `xhttpSettings` 或 node-agent 用户同步时，必须同步更新三份规则文件、`开发方案.md` 和相关接口/部署文档，并运行后端测试、前端构建和 Playwright smoke。
 - 修改双流量池字段、节点流量池归属、`/api/agent/traffic` 扣量逻辑、订阅过滤或套餐展示时，必须同步更新三份规则文件、`开发方案.md`、接口文档、节点代理文档和运维手册，并运行后端测试、前端构建和 Playwright smoke。
 
@@ -96,7 +97,7 @@ Go 代码必须使用 `gofmt`。包名保持短小、全小写。测试命名优
 - 多出口 IP 服务器必须由管理员在一键部署前显式开启“多 IP 服务器”模式；未开启时不得扫描服务器出口 IP，也不得自动创建多个节点。
 - 开启多 IP 模式后，必须先通过 SSH 扫描服务器公网 IPv4，并验证 `curl --interface <IP>` 的实际出口等于该 IP；只有管理员手动勾选确认的可用公网 IP 才能创建为逻辑出口节点。
 - 多 IP 模式下 `node_hosts` 表示一台物理服务器和唯一 node-agent 身份，`nodes` 表示逻辑出口节点；一个公网出口 IP 对应一条 `nodes` 记录。
-- 管理后台出口节点列表必须按节点服务器聚合展示：外层一行表示一台物理服务器，显示管理 IP、全部相关 IP、普通/家宽线路数量、SOCKS5 数量、TCP/XHTTP 数量；展开或编辑服务器时再展示具体 `nodes` 逻辑线路。新增家宽或普通线路时应优先绑定同一 `node_host_id`，而不是创建另一个物理服务器身份。
+- 管理后台出口节点列表必须按节点服务器聚合展示：外层一行表示一台物理服务器，显示管理 IP、全部相关 IP、普通/家宽线路数量、SOCKS5 数量、TCP/XHTTP 数量和已用监听端点；展开或编辑服务器时再展示具体 `nodes` 逻辑线路。新增家宽或普通线路时应优先绑定同一 `node_host_id`，而不是创建另一个物理服务器身份。
 - multi_exit 模式只安装一个 `node-agent`，使用 `AGENT_ROLE=multi_exit`、`NODE_HOST_ID`、`NODE_HOST_TOKEN` 和 `MULTI_NODE_CONFIG` 管理同一物理服务器下的多个逻辑节点。
 - 即使不是多出口 IP，只要一键部署选择了多个传输模式，也必须按多逻辑节点处理，并在目标服务器只运行一个 multi_exit node-agent。
 - multi_exit 生成的 Xray 配置必须为每个逻辑节点创建独立 inbound/outbound：普通节点使用 `freedom.sendThrough` 绑定本机出口 IP；家宽代理节点使用 `socks` outbound 指向唯一 `outbound_proxy_url`，如果设置了 `nodes.outbound_ip`，还必须把它作为 `socks.sendThrough`。

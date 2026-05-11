@@ -59,7 +59,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { adminApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 
 const stats = ref({
   userCount: 0,
@@ -93,16 +93,30 @@ onUnmounted(() => {
   padding: 20px;
 }
 .stat-item {
+  position: relative;
   text-align: center;
+  padding: 8px 0;
+}
+.stat-item::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  width: 32px;
+  height: 2px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, var(--rp-cyan), transparent);
+  box-shadow: 0 0 12px rgba(66, 245, 255, 0.7);
 }
 .stat-value {
   font-size: 36px;
-  font-weight: bold;
-  color: #409eff;
+  font-weight: 800;
+  color: var(--rp-cyan);
+  text-shadow: 0 0 18px rgba(66, 245, 255, 0.36);
 }
 .stat-label {
   font-size: 14px;
-  color: #606266;
+  color: var(--rp-muted);
   margin-top: 8px;
 }
 .quick-actions {

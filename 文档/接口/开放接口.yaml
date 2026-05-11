@@ -59,12 +59,33 @@ paths:
       responses:
         "200":
           description: 返回未逻辑删除的上架套餐，包含 is_default 基础套餐标识
+  /api/site/sales-landing:
+    get:
+      summary: 公开销售首页配置
+      responses:
+        "200":
+          description: 返回销售首页标题、导航、CTA、卖点、套餐卡片、场景、FAQ 和页脚链接配置
   /api/redeem:
     post:
       summary: 兑换码开通或续费订阅
       responses:
         "200":
           description: 兑换成功
+  /api/admin/site/sales-landing:
+    get:
+      summary: 管理员读取销售首页配置
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 返回完整销售首页配置；未保存过时返回默认值
+    put:
+      summary: 管理员保存销售首页配置
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 返回归一化后的销售首页配置，并记录管理员操作日志
   /api/admin/dashboard/stats:
     get:
       summary: 管理后台仪表盘统计

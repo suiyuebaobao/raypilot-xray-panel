@@ -33,7 +33,7 @@
 // 用户订单列表页。v1 阶段订单功能为骨架，暂无实际支付流程。
 import { ref, onMounted } from 'vue'
 import { userApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 
 const orders = ref([])
 const page = ref(1)

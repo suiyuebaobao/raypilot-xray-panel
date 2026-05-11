@@ -13,14 +13,17 @@
       </div>
     </div>
 
-    <el-table
-      ref="groupsTableRef"
-      :data="groups"
-      border
-      style="width: 100%"
-      v-loading="loading"
-      @selection-change="handleGroupSelectionChange"
-    >
+    <div class="admin-table-scroll">
+      <el-table
+        ref="groupsTableRef"
+        :data="groups"
+        border
+        :fit="false"
+        scrollbar-always-on
+        style="width: 100%"
+        v-loading="loading"
+        @selection-change="handleGroupSelectionChange"
+      >
       <el-table-column type="selection" width="48" />
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="name" label="分组名称" min-width="140" />
@@ -49,14 +52,15 @@
       <el-table-column label="节点数" width="80">
         <template #default="{ row }">{{ getGroupNodes(row.id).length }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="260">
+      <el-table-column label="操作" width="260" fixed="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" text @click="showManageNodesDialog(row)">管理节点</el-button>
           <el-button size="small" @click="showEditDialog(row)">编辑</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑分组' : '新增分组'" width="500px">
       <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
@@ -137,7 +141,8 @@
 // 管理后台 - 节点分组管理页。
 import { computed, nextTick, ref, reactive, onMounted } from 'vue'
 import { adminApi } from '@/api'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
 
 const groups = ref([])
 const loading = ref(false)
@@ -478,6 +483,10 @@ onMounted(() => {
   background: #f5f7fa;
   color: #606266;
   font-size: 14px;
+}
+.admin-table-scroll {
+  width: 100%;
+  overflow-x: auto;
 }
 .nodes-toolbar {
   display: flex;

@@ -1,9 +1,11 @@
 // 前端路由配置。
 //
 // 路由结构：
+// /           — 销售首页
+// /platform   — 公开平台能力页
 // /login      — 用户登录
 // /register   — 用户注册
-// /           — 用户首页（需登录）
+// /dashboard  — 用户首页（需登录）
 // /subscription — 我的订阅（需登录）
 // /orders     — 订单列表（需登录）
 // /plans      — 套餐列表
@@ -15,6 +17,18 @@ import { useUserStore } from '@/stores/user'
 import { authApi, userApi } from '@/api'
 
 const routes = [
+  {
+    path: '/',
+    name: 'SalesLanding',
+    component: () => import('@/pages/SalesLanding.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/platform',
+    name: 'Landing',
+    component: () => import('@/pages/Landing.vue'),
+    meta: { public: true },
+  },
   // 用户侧
   {
     path: '/login',
@@ -33,7 +47,7 @@ const routes = [
     component: () => import('@/layouts/UserLayout.vue'),
     meta: { requiresAuth: true },
     children: [
-      { path: '', name: 'Home', component: () => import('@/pages/user/Home.vue') },
+      { path: 'dashboard', name: 'Home', component: () => import('@/pages/user/Home.vue') },
       { path: 'subscription', name: 'Subscription', component: () => import('@/pages/user/Subscription.vue') },
       { path: 'orders', name: 'Orders', component: () => import('@/pages/user/Orders.vue') },
       { path: 'plans', name: 'Plans', component: () => import('@/pages/user/Plans.vue') },
@@ -62,6 +76,7 @@ const routes = [
       { path: 'orders', name: 'AdminOrders', component: () => import('@/pages/admin/Orders.vue') },
       { path: 'redeem-codes', name: 'AdminRedeemCodes', component: () => import('@/pages/admin/RedeemCodes.vue') },
       { path: 'subscription-tokens', name: 'AdminSubscriptionTokens', component: () => import('@/pages/admin/SubscriptionTokens.vue') },
+      { path: 'sales-landing', name: 'AdminSalesLanding', component: () => import('@/pages/admin/SalesLanding.vue') },
       { path: 'logs', name: 'AdminLogs', component: () => import('@/pages/admin/Logs.vue') },
     ],
   },
@@ -99,7 +114,7 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
-  // 已登录用户访问登录/注册页时，跳转到首页
+  // 已登录用户访问登录/注册页时，跳转到用户控制台
   if (to.meta.guest && userStore.isLoggedIn) {
     next({ name: 'Home' })
     return

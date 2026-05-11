@@ -16,14 +16,17 @@
       </div>
     </div>
 
-    <el-table
-      ref="usersTableRef"
-      :data="users"
-      border
-      style="width: 100%"
-      v-loading="loading"
-      @selection-change="handleUserSelectionChange"
-    >
+    <div class="admin-table-scroll">
+      <el-table
+        ref="usersTableRef"
+        :data="users"
+        border
+        :fit="false"
+        scrollbar-always-on
+        style="width: 100%"
+        v-loading="loading"
+        @selection-change="handleUserSelectionChange"
+      >
       <el-table-column type="selection" width="48" :selectable="canSelectUser" />
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="username" label="用户名" min-width="120" />
@@ -64,7 +67,7 @@
       <el-table-column prop="last_login_at" label="最后登录" width="180">
         <template #default="{ row }">{{ row.last_login_at ? formatDate(row.last_login_at) : '-' }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="400">
+      <el-table-column label="操作" width="400" fixed="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" @click="handleSubscription(row)">订阅</el-button>
           <el-button size="small" type="info" @click="handleUsage(row)">用量</el-button>
@@ -75,7 +78,8 @@
           <el-button size="small" type="danger" :disabled="isCurrentUser(row)" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </div>
     <div class="pagination" style="margin-top: 16px; text-align: right">
       <el-pagination
         v-model:current-page="page"
@@ -302,7 +306,8 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { adminApi } from '@/api'
 import { useUserStore } from '@/stores/user'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
 
 const userStore = useUserStore()
 const users = ref([])
@@ -810,6 +815,10 @@ onMounted(() => {
   color: #606266;
   font-size: 14px;
 }
+.admin-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
 .user-plan-cell {
   display: flex;
   flex-direction: column;
@@ -838,14 +847,14 @@ onMounted(() => {
 }
 .traffic-line strong {
   font-size: 13px;
-  color: #303133;
+  color: var(--rp-cyan);
 }
 .traffic-line span {
-  color: #909399;
+  color: var(--rp-muted);
   font-size: 12px;
 }
 .token-list {
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid rgba(92, 241, 255, 0.14);
   margin-top: 8px;
   padding-top: 12px;
 }
@@ -880,22 +889,23 @@ onMounted(() => {
   margin-bottom: 14px;
 }
 .usage-metric {
-  border: 1px solid #ebeef5;
+  border: 1px solid rgba(92, 241, 255, 0.16);
   border-radius: 6px;
   padding: 12px;
   min-width: 0;
+  background: rgba(9, 16, 30, 0.62);
 }
 .usage-metric span,
 .usage-metric small {
   display: block;
-  color: #909399;
+  color: var(--rp-muted);
 }
 .usage-metric strong {
   display: block;
   font-size: 20px;
   line-height: 28px;
   margin: 4px 0;
-  color: #303133;
+  color: var(--rp-cyan);
 }
 .usage-subscription {
   margin-bottom: 12px;

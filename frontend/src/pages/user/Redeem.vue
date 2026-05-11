@@ -33,7 +33,7 @@
 // 兑换码页面。用户输入兑换码开通订阅。
 import { ref, reactive } from 'vue'
 import { redeemApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 
 const formRef = ref(null)
 const form = reactive({ code: '' })

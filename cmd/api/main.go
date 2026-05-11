@@ -61,6 +61,7 @@ func main() {
 	usageLedgerRepo := repository.NewUsageLedgerRepository(db)
 	operationLogRepo := repository.NewOperationLogRepository(db)
 	deploymentLogRepo := repository.NewDeploymentLogRepository(db)
+	siteSettingRepo := repository.NewSiteSettingRepository(db)
 	runtimeLogReader := repository.NewRuntimeLogReader("logs")
 
 	// 创建 Service
@@ -126,6 +127,7 @@ func main() {
 	relayDeploySvc := service.NewRelayDeployServiceWithAutomation(relayRepo, relaySvc, nodeRepo, nodeAccessSvc)
 	relayDeployHandler := handler.NewRelayDeployHandler(relayDeploySvc, deploymentLogSvc)
 	adminLogHandler := handler.NewAdminLogHandler(runtimeLogSvc, deploymentLogSvc, operationLogSvc)
+	siteConfigHandler := handler.NewSiteConfigHandler(siteSettingRepo, operationLogSvc)
 
 	// 设置 Gin 模式
 	gin.SetMode(gin.ReleaseMode)
@@ -175,6 +177,7 @@ func main() {
 
 	// 套餐（公开）
 	r.GET("/api/plans", planHandler.ListActive)
+	r.GET("/api/site/sales-landing", siteConfigHandler.GetSalesLanding)
 
 	// 订阅下载（公开，通过 token 鉴权）
 	r.GET("/sub/:token/:format", subHandler.Download)
@@ -271,6 +274,10 @@ func main() {
 		adminGroup.GET("/logs/runtime", adminLogHandler.Runtime)
 		adminGroup.GET("/logs/deployments", adminLogHandler.Deployments)
 		adminGroup.GET("/logs/operations", adminLogHandler.Operations)
+
+		// 销售首页配置
+		adminGroup.GET("/site/sales-landing", siteConfigHandler.GetSalesLanding)
+		adminGroup.PUT("/site/sales-landing", siteConfigHandler.UpdateSalesLanding)
 	}
 
 	// TODO: 注册更多路由（后续阶段）

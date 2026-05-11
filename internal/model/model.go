@@ -5,7 +5,9 @@
 package model
 
 import (
+	"encoding/json"
 	"math"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -667,6 +669,346 @@ type PaymentRecord struct {
 // TableName 指定表名。
 func (PaymentRecord) TableName() string {
 	return "payment_records"
+}
+
+// SiteSetting 站点级配置。
+type SiteSetting struct {
+	ID        uint64    `gorm:"primaryKey;column:id" json:"id"`
+	Key       string    `gorm:"column:setting_key;type:varchar(128);uniqueIndex" json:"key"`
+	Value     string    `gorm:"column:setting_value;type:json" json:"value"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+}
+
+func (SiteSetting) TableName() string {
+	return "site_settings"
+}
+
+const SiteSettingSalesLanding = "sales_landing"
+
+// SalesLandingConfig 销售首页配置。
+type SalesLandingConfig struct {
+	Brand         string             `json:"brand"`
+	NavLinks      []SalesLandingLink `json:"nav_links"`
+	Badges        []string           `json:"badges"`
+	Title         string             `json:"title"`
+	Subtitle      string             `json:"subtitle"`
+	PrimaryCTA    SalesLandingLink   `json:"primary_cta"`
+	SecondaryCTA  SalesLandingLink   `json:"secondary_cta"`
+	TrustTags     []string           `json:"trust_tags"`
+	HeroNodes     []SalesLandingNode `json:"hero_nodes"`
+	SellingPoints []SalesLandingItem `json:"selling_points"`
+	Plans         []SalesLandingPlan `json:"plans"`
+	UseCases      []SalesLandingItem `json:"use_cases"`
+	FAQs          []SalesLandingFAQ  `json:"faqs"`
+	FinalCTA      SalesLandingCTA    `json:"final_cta"`
+	FooterText    string             `json:"footer_text"`
+}
+
+type SalesLandingLink struct {
+	Label string `json:"label"`
+	To    string `json:"to"`
+}
+
+type SalesLandingNode struct {
+	Flag    string `json:"flag"`
+	Name    string `json:"name"`
+	Desc    string `json:"desc"`
+	Latency string `json:"latency"`
+}
+
+type SalesLandingItem struct {
+	No    string `json:"no"`
+	Title string `json:"title"`
+	Text  string `json:"text"`
+}
+
+type SalesLandingPlan struct {
+	Tag      string   `json:"tag"`
+	Name     string   `json:"name"`
+	Price    string   `json:"price"`
+	Unit     string   `json:"unit"`
+	Action   string   `json:"action"`
+	Featured bool     `json:"featured"`
+	Features []string `json:"features"`
+}
+
+type SalesLandingFAQ struct {
+	Q string `json:"q"`
+	A string `json:"a"`
+}
+
+type SalesLandingCTA struct {
+	Title       string             `json:"title"`
+	Text        string             `json:"text"`
+	ButtonLabel string             `json:"button_label"`
+	ButtonTo    string             `json:"button_to"`
+	FooterLinks []SalesLandingLink `json:"footer_links"`
+}
+
+func DefaultSalesLandingConfig() SalesLandingConfig {
+	return SalesLandingConfig{
+		Brand: "RayPilot",
+		NavLinks: []SalesLandingLink{
+			{Label: "套餐", To: "#plans"},
+			{Label: "节点", To: "#nodes"},
+			{Label: "说明", To: "#faq"},
+			{Label: "登录", To: "/login"},
+		},
+		Badges:       []string{"高速节点", "稳定订阅", "按量流量"},
+		Title:        "高速 VPN 节点",
+		Subtitle:     "面向 AI、游戏、跨境办公和日常网络访问，提供多地区出口、专属订阅链接和清晰的流量管理。",
+		PrimaryCTA:   SalesLandingLink{Label: "立即开通", To: "/register"},
+		SecondaryCTA: SalesLandingLink{Label: "已有账号登录", To: "/login"},
+		TrustTags:    []string{"VLESS Reality", "XHTTP 可选", "Clash / Mihomo 订阅"},
+		HeroNodes: []SalesLandingNode{
+			{Flag: "HK", Name: "香港入口", Desc: "低延迟中转", Latency: "35ms"},
+			{Flag: "US", Name: "美国出口", Desc: "AI / 海外服务", Latency: "128ms"},
+			{Flag: "SG", Name: "新加坡备用", Desc: "亚洲优化", Latency: "68ms"},
+		},
+		SellingPoints: []SalesLandingItem{
+			{No: "01", Title: "多地区高速节点", Text: "按地区和线路能力下发订阅，支持直连与中转线路，减少单点不稳定带来的影响。"},
+			{No: "02", Title: "流量清晰可查", Text: "用户中心展示套餐、剩余流量和订阅链接，用多少、剩多少一目了然。"},
+			{No: "03", Title: "客户端导入简单", Text: "支持 Clash / Mihomo 等常见客户端订阅格式，复制订阅链接即可导入使用。"},
+		},
+		Plans: []SalesLandingPlan{
+			{Tag: "STARTER", Name: "轻量流量", Price: "按套餐", Unit: "灵活开通", Action: "开始使用", Features: []string{"适合临时访问和轻量使用", "标准节点订阅", "用户中心自助查看"}},
+			{Tag: "POPULAR", Name: "高速节点", Price: "推荐", Unit: "日常主力", Action: "选择推荐", Featured: true, Features: []string{"适合 AI、办公和影音访问", "多线路订阅", "支持流量池计费"}},
+			{Tag: "PRO", Name: "大流量套餐", Price: "长期", Unit: "高频使用", Action: "开通套餐", Features: []string{"适合多设备和长期使用", "更多流量额度", "可配合兑换码续费"}},
+		},
+		UseCases: []SalesLandingItem{
+			{Title: "AI 工具访问", Text: "为海外 AI 服务准备稳定出口线路。"},
+			{Title: "游戏加速", Text: "选择低延迟地区节点，减少跨境链路波动。"},
+			{Title: "跨境办公", Text: "让资料查询、远程协作和海外服务访问更顺畅。"},
+			{Title: "多设备订阅", Text: "同一账号管理套餐和订阅链接，使用更方便。"},
+		},
+		FAQs: []SalesLandingFAQ{
+			{Q: "购买后怎么使用？", A: "注册并开通套餐后，在用户中心复制订阅链接，导入 Clash Verge Rev、Mihomo 等客户端即可使用。"},
+			{Q: "流量怎么计算？", A: "系统会按套餐规则统计已用流量和剩余流量，不同套餐可能有不同的计费倍率。"},
+			{Q: "支持哪些节点模式？", A: "当前系统支持 VLESS Reality、TCP、XHTTP 和中转线路，具体以下发订阅为准。"},
+		},
+		FinalCTA: SalesLandingCTA{
+			Title:       "现在开通 RayPilot 节点服务",
+			Text:        "注册账号后进入用户中心，选择套餐或兑换码开通订阅。",
+			ButtonLabel: "创建账号",
+			ButtonTo:    "/register",
+			FooterLinks: []SalesLandingLink{
+				{Label: "用户登录", To: "/login"},
+				{Label: "平台能力", To: "/platform"},
+			},
+		},
+		FooterText: "RayPilot VPN 节点与流量服务",
+	}
+}
+
+func NormalizeSalesLandingConfig(cfg SalesLandingConfig) SalesLandingConfig {
+	def := DefaultSalesLandingConfig()
+	cfg.Brand = strings.TrimSpace(cfg.Brand)
+	cfg.Title = strings.TrimSpace(cfg.Title)
+	cfg.Subtitle = strings.TrimSpace(cfg.Subtitle)
+	cfg.FooterText = strings.TrimSpace(cfg.FooterText)
+	if cfg.Brand == "" {
+		cfg.Brand = def.Brand
+	}
+	cfg.NavLinks = normalizeSalesLandingLinks(cfg.NavLinks, def.NavLinks)
+	cfg.Badges = normalizeSalesLandingTextList(cfg.Badges, def.Badges)
+	if cfg.Title == "" {
+		cfg.Title = def.Title
+	}
+	if cfg.Subtitle == "" {
+		cfg.Subtitle = def.Subtitle
+	}
+	cfg.PrimaryCTA = normalizeSalesLandingLink(cfg.PrimaryCTA, def.PrimaryCTA)
+	cfg.SecondaryCTA = normalizeSalesLandingLink(cfg.SecondaryCTA, def.SecondaryCTA)
+	cfg.TrustTags = normalizeSalesLandingTextList(cfg.TrustTags, def.TrustTags)
+	cfg.HeroNodes = normalizeSalesLandingNodes(cfg.HeroNodes, def.HeroNodes)
+	cfg.SellingPoints = normalizeSalesLandingItems(cfg.SellingPoints, def.SellingPoints)
+	cfg.Plans = normalizeSalesLandingPlans(cfg.Plans, def.Plans)
+	cfg.UseCases = normalizeSalesLandingItems(cfg.UseCases, def.UseCases)
+	cfg.FAQs = normalizeSalesLandingFAQs(cfg.FAQs, def.FAQs)
+	cfg.FinalCTA = normalizeSalesLandingCTA(cfg.FinalCTA, def.FinalCTA)
+	if cfg.FooterText == "" {
+		cfg.FooterText = def.FooterText
+	}
+	return cfg
+}
+
+func normalizeSalesLandingLink(link, fallback SalesLandingLink) SalesLandingLink {
+	link.Label = strings.TrimSpace(link.Label)
+	link.To = sanitizeSalesLandingHref(link.To)
+	if link.Label == "" {
+		link.Label = fallback.Label
+	}
+	if link.To == "" {
+		link.To = sanitizeSalesLandingHref(fallback.To)
+	}
+	return link
+}
+
+func normalizeSalesLandingLinks(links, fallback []SalesLandingLink) []SalesLandingLink {
+	normalized := make([]SalesLandingLink, 0, len(links))
+	for _, link := range links {
+		link.Label = strings.TrimSpace(link.Label)
+		link.To = sanitizeSalesLandingHref(link.To)
+		if link.Label == "" && link.To == "" {
+			continue
+		}
+		if link.Label == "" {
+			link.Label = link.To
+		}
+		if link.To == "" {
+			link.To = "#"
+		}
+		normalized = append(normalized, link)
+	}
+	if len(normalized) == 0 {
+		return fallback
+	}
+	return normalized
+}
+
+func normalizeSalesLandingTextList(values, fallback []string) []string {
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			normalized = append(normalized, value)
+		}
+	}
+	if len(normalized) == 0 {
+		return fallback
+	}
+	return normalized
+}
+
+func normalizeSalesLandingNodes(nodes, fallback []SalesLandingNode) []SalesLandingNode {
+	normalized := make([]SalesLandingNode, 0, len(nodes))
+	for _, node := range nodes {
+		node.Flag = strings.TrimSpace(node.Flag)
+		node.Name = strings.TrimSpace(node.Name)
+		node.Desc = strings.TrimSpace(node.Desc)
+		node.Latency = strings.TrimSpace(node.Latency)
+		if node.Flag == "" && node.Name == "" && node.Desc == "" && node.Latency == "" {
+			continue
+		}
+		normalized = append(normalized, node)
+	}
+	if len(normalized) == 0 {
+		return fallback
+	}
+	return normalized
+}
+
+func normalizeSalesLandingItems(items, fallback []SalesLandingItem) []SalesLandingItem {
+	normalized := make([]SalesLandingItem, 0, len(items))
+	for _, item := range items {
+		item.No = strings.TrimSpace(item.No)
+		item.Title = strings.TrimSpace(item.Title)
+		item.Text = strings.TrimSpace(item.Text)
+		if item.No == "" && item.Title == "" && item.Text == "" {
+			continue
+		}
+		normalized = append(normalized, item)
+	}
+	if len(normalized) == 0 {
+		return fallback
+	}
+	return normalized
+}
+
+func normalizeSalesLandingPlans(plans, fallback []SalesLandingPlan) []SalesLandingPlan {
+	normalized := make([]SalesLandingPlan, 0, len(plans))
+	for _, plan := range plans {
+		plan.Tag = strings.TrimSpace(plan.Tag)
+		plan.Name = strings.TrimSpace(plan.Name)
+		plan.Price = strings.TrimSpace(plan.Price)
+		plan.Unit = strings.TrimSpace(plan.Unit)
+		plan.Action = strings.TrimSpace(plan.Action)
+		plan.Features = normalizeSalesLandingTextList(plan.Features, nil)
+		if plan.Features == nil {
+			plan.Features = []string{}
+		}
+		if plan.Tag == "" && plan.Name == "" && plan.Price == "" && plan.Unit == "" && plan.Action == "" && len(plan.Features) == 0 {
+			continue
+		}
+		if plan.Action == "" {
+			plan.Action = "开始使用"
+		}
+		normalized = append(normalized, plan)
+	}
+	if len(normalized) == 0 {
+		return fallback
+	}
+	return normalized
+}
+
+func normalizeSalesLandingFAQs(faqs, fallback []SalesLandingFAQ) []SalesLandingFAQ {
+	normalized := make([]SalesLandingFAQ, 0, len(faqs))
+	for _, faq := range faqs {
+		faq.Q = strings.TrimSpace(faq.Q)
+		faq.A = strings.TrimSpace(faq.A)
+		if faq.Q == "" && faq.A == "" {
+			continue
+		}
+		normalized = append(normalized, faq)
+	}
+	if len(normalized) == 0 {
+		return fallback
+	}
+	return normalized
+}
+
+func normalizeSalesLandingCTA(cta, fallback SalesLandingCTA) SalesLandingCTA {
+	cta.Title = strings.TrimSpace(cta.Title)
+	cta.Text = strings.TrimSpace(cta.Text)
+	cta.ButtonLabel = strings.TrimSpace(cta.ButtonLabel)
+	cta.ButtonTo = sanitizeSalesLandingHref(cta.ButtonTo)
+	if cta.Title == "" {
+		cta.Title = fallback.Title
+	}
+	if cta.Text == "" {
+		cta.Text = fallback.Text
+	}
+	if cta.ButtonLabel == "" {
+		cta.ButtonLabel = fallback.ButtonLabel
+	}
+	if cta.ButtonTo == "" {
+		cta.ButtonTo = sanitizeSalesLandingHref(fallback.ButtonTo)
+	}
+	cta.FooterLinks = normalizeSalesLandingLinks(cta.FooterLinks, fallback.FooterLinks)
+	return cta
+}
+
+func sanitizeSalesLandingHref(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "/") || strings.HasPrefix(value, "#") {
+		return value
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return ""
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+		if parsed.Host != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func ParseSalesLandingConfig(raw string) SalesLandingConfig {
+	if strings.TrimSpace(raw) == "" {
+		return DefaultSalesLandingConfig()
+	}
+	var cfg SalesLandingConfig
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return DefaultSalesLandingConfig()
+	}
+	return NormalizeSalesLandingConfig(cfg)
 }
 
 // OperationLog 操作日志模型。

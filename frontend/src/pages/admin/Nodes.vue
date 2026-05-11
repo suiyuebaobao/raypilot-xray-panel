@@ -16,19 +16,32 @@
       </div>
     </div>
 
-    <el-table
-      ref="serversTableRef"
-      :data="nodeServers"
-      border
-      style="width: 100%"
-      v-loading="loading"
-      row-key="key"
-      @selection-change="handleServerSelectionChange"
-    >
+    <div class="node-table-scroll">
+      <el-table
+        ref="serversTableRef"
+        :data="nodeServers"
+        border
+        class="node-server-table"
+        :fit="false"
+        scrollbar-always-on
+        style="width: 100%"
+        v-loading="loading"
+        row-key="key"
+        @selection-change="handleServerSelectionChange"
+      >
       <el-table-column type="selection" width="48" />
       <el-table-column type="expand" width="44">
         <template #default="{ row }">
-          <el-table :data="row.nodes" border size="small" class="line-table">
+          <div class="node-table-scroll node-table-scroll--nested">
+            <el-table
+              :data="row.nodes"
+              border
+              size="small"
+              class="line-table"
+              :fit="false"
+              scrollbar-always-on
+              style="width: 100%"
+            >
             <el-table-column prop="id" label="线路 ID" width="80" />
             <el-table-column prop="name" label="线路名称" min-width="170" />
             <el-table-column label="入口" min-width="150">
@@ -66,13 +79,14 @@
                 <el-tag :type="line.is_enabled ? 'success' : 'info'">{{ line.is_enabled ? '启用' : '禁用' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="150">
+            <el-table-column label="操作" width="150" fixed="right">
               <template #default="{ row: line }">
                 <el-button size="small" @click="showEditDialog(line)">编辑</el-button>
                 <el-button size="small" type="danger" @click="handleDelete(line)">删除</el-button>
               </template>
             </el-table-column>
-          </el-table>
+            </el-table>
+          </div>
         </template>
       </el-table-column>
       <el-table-column label="节点服务器" min-width="220">
@@ -103,6 +117,12 @@
             <el-tag size="small" type="warning" effect="plain">XHTTP {{ row.xhttp_count }}</el-tag>
             <el-tag size="small" type="info" effect="plain">线路 {{ row.nodes.length }}</el-tag>
           </div>
+          <div v-if="row.used_ports.length" class="server-used-ports">
+            <span>端口</span>
+            <el-tag v-for="item in row.used_ports" :key="item.key" size="small" effect="plain">
+              {{ item.listen_ip }}:{{ item.port }} {{ transportLabel(item.transport) }}
+            </el-tag>
+          </div>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="110">
@@ -124,15 +144,16 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="340">
+      <el-table-column label="操作" width="340" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" type="primary" @click="showServerDialog(row)">编辑服务器</el-button>
+          <el-button size="small" type="primary" @click="showNodeServerEdit(row)">编辑</el-button>
           <el-button size="small" @click="showAddResidentialForServer(row)">加家宽</el-button>
           <el-button size="small" type="warning" @click="showRepairCenterDialog(row)">修复中心</el-button>
           <el-button size="small" type="danger" @click="handleDeleteServer(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑节点' : '新增节点'" width="600px">
       <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
@@ -187,6 +208,13 @@
             <el-option label="XHTTP + Reality" value="xhttp" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="formServerUsedPorts.length" label="已用端口">
+          <div class="used-port-list">
+            <el-tag v-for="item in formServerUsedPorts" :key="item.key" size="small" effect="plain">
+              {{ item.listen_ip }}:{{ item.port }} {{ transportLabel(item.transport) }} · {{ item.name }}
+            </el-tag>
+          </div>
+        </el-form-item>
         <el-form-item v-if="hasTransport(form, 'tcp')" label="TCP 端口" prop="tcp_port">
           <el-input-number v-model="form.tcp_port" :min="1" :max="65535" />
         </el-form-item>
@@ -209,6 +237,14 @@
             <el-input v-model="form.xhttp_host" placeholder="可选" />
           </el-form-item>
         </template>
+        <el-form-item v-if="formPortConflicts.length" label="端口冲突">
+          <el-alert
+            :title="formatPortConflictMessage(formPortConflicts)"
+            type="warning"
+            :closable="false"
+            show-icon
+          />
+        </el-form-item>
         <el-form-item label="Server Name">
           <el-input v-model="form.server_name" placeholder="Reality SNI" />
         </el-form-item>
@@ -425,11 +461,27 @@
             <el-tag size="small" effect="plain">线路 {{ activeServer.nodes.length }}</el-tag>
           </div>
         </div>
+        <div v-if="activeServerUsedPorts.length" class="used-port-panel">
+          <span>已用端口</span>
+          <div class="used-port-list">
+            <el-tag v-for="item in activeServerUsedPorts" :key="item.key" size="small" effect="plain">
+              {{ item.listen_ip }}:{{ item.port }} {{ transportLabel(item.transport) }} · {{ item.name }}
+            </el-tag>
+          </div>
+        </div>
         <div class="server-dialog-actions">
           <el-button type="primary" @click="showAddNormalForServer(activeServer)">加普通线路</el-button>
           <el-button @click="showAddResidentialForServer(activeServer)">加家宽线路</el-button>
         </div>
-        <el-table :data="activeServer.nodes" border size="small">
+        <div class="node-table-scroll node-table-scroll--dialog">
+          <el-table
+            :data="activeServer.nodes"
+            border
+            size="small"
+            :fit="false"
+            scrollbar-always-on
+            style="width: 100%"
+          >
           <el-table-column prop="id" label="线路 ID" width="80" />
           <el-table-column prop="name" label="线路名称" min-width="170" />
           <el-table-column label="入口" min-width="150">
@@ -451,13 +503,14 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150">
+          <el-table-column label="操作" width="150" fixed="right">
             <template #default="{ row }">
               <el-button size="small" @click="showEditDialog(row)">编辑</el-button>
               <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
-        </el-table>
+          </el-table>
+        </div>
       </div>
       <template #footer>
         <el-button @click="serverDialogVisible = false">关闭</el-button>
@@ -522,7 +575,8 @@
 <script setup>
 import { computed, ref, reactive, onMounted } from 'vue'
 import { adminApi } from '@/api'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
 import { CircleCheck, CircleClose, Loading } from '@element-plus/icons-vue'
 
 const nodes = ref([])
@@ -623,6 +677,10 @@ const deployForm = reactive({
 
 const nodeServers = computed(() => aggregateNodeServers(nodes.value))
 const activeServer = computed(() => nodeServers.value.find((server) => server.key === activeServerKey.value) || null)
+const activeServerUsedPorts = computed(() => usedPortsForLines(activeServer.value?.nodes || []))
+const formServer = computed(() => serverForForm())
+const formServerUsedPorts = computed(() => usedPortsForLines(formServer.value?.nodes || [], isEdit.value ? editingId.value : null))
+const formPortConflicts = computed(() => portConflictsForForm(form, formServer.value?.nodes || [], isEdit.value ? editingId.value : null))
 const outboundIpOptions = computed(() => collectKnownIPs(activeServer.value?.nodes || nodes.value, form.host))
 const deployOutboundIpOptions = computed(() => {
   const scanned = scannedIps.value.filter((item) => item.is_usable).map((item) => item.ip)
@@ -802,6 +860,65 @@ function transportLabel(transport) {
   return transport === 'xhttp' ? 'XHTTP' : 'TCP'
 }
 
+function portNumber(value) {
+  const port = Number(value)
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : 0
+}
+
+function listenIPForLine(line) {
+  if (isIPv4(line?.listen_ip)) return line.listen_ip
+  if (isIPv4(line?.host)) return line.host
+  return '0.0.0.0'
+}
+
+function listenIPForTarget(target) {
+  return isIPv4(target?.host) ? target.host : '0.0.0.0'
+}
+
+function usedPortsForLines(lines, excludedId = null) {
+  return (lines || [])
+    .filter((line) => String(line.id) !== String(excludedId || ''))
+    .map((line) => ({
+      listen_ip: listenIPForLine(line),
+      key: `${line.id}-${listenIPForLine(line)}-${line.port}`,
+      id: line.id,
+      name: line.name || `线路 #${line.id}`,
+      port: portNumber(line.port),
+      transport: line.transport || 'tcp',
+    }))
+    .filter((item) => item.port)
+    .sort((a, b) => a.listen_ip.localeCompare(b.listen_ip) || a.port - b.port || a.name.localeCompare(b.name))
+}
+
+function selectedPortsForTarget(target) {
+  const ports = []
+  const transports = normalizedTransports(target)
+  const listenIP = listenIPForTarget(target)
+  if (transports.includes('tcp')) {
+    ports.push({ listen_ip: listenIP, transport: 'tcp', port: portNumber(target.tcp_port) })
+  }
+  if (transports.includes('xhttp')) {
+    ports.push({ listen_ip: listenIP, transport: 'xhttp', port: portNumber(target.xhttp_port) })
+  }
+  return ports.filter((item) => item.port)
+}
+
+function portConflictsForForm(target, lines, excludedId = null) {
+  const usedPorts = usedPortsForLines(lines, excludedId)
+  return selectedPortsForTarget(target)
+    .map((selected) => {
+      const matched = usedPorts.find((item) => item.listen_ip === selected.listen_ip && item.port === selected.port)
+      return matched ? { ...selected, matched } : null
+    })
+    .filter(Boolean)
+}
+
+function formatPortConflictMessage(conflicts) {
+  return conflicts
+    .map((item) => `${item.listen_ip}:${item.port} 已被 ${item.matched.name}（${transportLabel(item.matched.transport)}）使用`)
+    .join('；')
+}
+
 function normalizedTransports(target) {
   const values = selectedTransports(target)
   return values.length ? values : ['tcp']
@@ -898,6 +1015,31 @@ function collectKnownIPs(lines, fallbackHost = '') {
   return uniqueValues(values.filter(isIPv4))
 }
 
+function serverForLine(line) {
+  if (!line) return null
+  return nodeServers.value.find((server) => {
+    if (line.node_host_id && server.node_host_id === line.node_host_id) return true
+    return (server.nodes || []).some((item) => String(item.id) === String(line.id))
+  }) || null
+}
+
+function serverForForm() {
+  if (activeServer.value) return activeServer.value
+  if (form.node_host_id) {
+    const matchedByHost = nodeServers.value.find((server) => server.node_host_id === form.node_host_id)
+    if (matchedByHost) return matchedByHost
+  }
+  if (isEdit.value && editingId.value) {
+    const matchedLine = nodes.value.find((node) => String(node.id) === String(editingId.value))
+    const matchedServer = serverForLine(matchedLine)
+    if (matchedServer) return matchedServer
+  }
+  const matchedByAgent = nodeServers.value.find((server) => (server.nodes || []).some((line) => line.agent_base_url === form.agent_base_url))
+  if (matchedByAgent) return matchedByAgent
+  const matchedByHost = nodeServers.value.find((server) => (server.ips || []).includes(form.host))
+  return matchedByHost || null
+}
+
 function managementIPForLines(lines) {
   for (const line of lines) {
     const agentHost = hostFromURL(line.agent_base_url)
@@ -950,6 +1092,7 @@ function aggregateNodeServers(items) {
       socks5_count: sortedLines.filter((line) => line.outbound_type === 'socks5').length,
       tcp_count: sortedLines.filter((line) => (line.transport || 'tcp') === 'tcp').length,
       xhttp_count: sortedLines.filter((line) => line.transport === 'xhttp').length,
+      used_ports: usedPortsForLines(sortedLines),
       enabled_count: sortedLines.filter((line) => line.is_enabled).length,
       last_heartbeat_at: maxDateString(sortedLines.map((line) => line.last_heartbeat_at)),
       last_traffic_report_at: maxDateString(sortedLines.map((line) => line.last_traffic_report_at)),
@@ -969,6 +1112,7 @@ function maskProxyUrl(value) {
 }
 
 function resetForm() {
+  activeServerKey.value = ''
   form.name = ''
   form.host = ''
   form.traffic_pool = 'normal'
@@ -1046,6 +1190,8 @@ function showAddNormalForServer(server) {
 function showEditDialog(row) {
   isEdit.value = true
   editingId.value = row.id
+  const server = serverForLine(row)
+  activeServerKey.value = server?.key || ''
   serverDialogVisible.value = false
   form.name = row.name
   form.host = row.host
@@ -1088,6 +1234,11 @@ async function handleSave() {
     }
     if (transports.includes('tcp') && transports.includes('xhttp') && form.tcp_port === form.xhttp_port) {
       ElMessage.warning('TCP 和 XHTTP 端口不能相同')
+      return
+    }
+    const conflicts = portConflictsForForm(form, formServer.value?.nodes || [], isEdit.value ? editingId.value : null)
+    if (conflicts.length) {
+      ElMessage.warning(formatPortConflictMessage(conflicts))
       return
     }
     const primaryTransport = transports[0]
@@ -1160,6 +1311,15 @@ function clearServerSelection() {
 function showServerDialog(row) {
   activeServerKey.value = row.key
   serverDialogVisible.value = true
+}
+
+function showNodeServerEdit(row) {
+  const lines = row.nodes || []
+  if (lines.length === 1) {
+    showEditDialog(lines[0])
+    return
+  }
+  showServerDialog(row)
 }
 
 function showRepairCenterDialog(row) {
@@ -1388,7 +1548,7 @@ onMounted(() => {
 .deploy-steps {
   margin-top: 16px;
   padding: 12px;
-  background: #f5f7fa;
+  background: rgba(9, 16, 30, 0.62);
   border-radius: 4px;
   max-height: 300px;
   overflow-y: auto;
@@ -1423,6 +1583,31 @@ onMounted(() => {
   margin: 0 0 16px 120px;
   width: calc(100% - 120px);
 }
+.node-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+}
+.node-table-scroll--nested {
+  margin: 8px 0;
+}
+.node-table-scroll--dialog {
+  max-width: 100%;
+}
+.node-server-table {
+  min-width: 1760px;
+}
+.line-table {
+  min-width: 1200px;
+}
+.node-table-scroll :deep(.el-scrollbar__bar.is-horizontal) {
+  height: 10px;
+}
+.node-table-scroll :deep(.el-scrollbar__bar.is-horizontal .el-scrollbar__thumb) {
+  background: rgba(66, 245, 255, 0.42);
+}
 .traffic-sync-cell {
   display: flex;
   flex-direction: column;
@@ -1445,9 +1630,6 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.line-table {
-  margin: 8px 0;
-}
 .server-cell,
 .ip-cell,
 .line-outbound,
@@ -1464,10 +1646,33 @@ onMounted(() => {
   font-size: 12px;
 }
 .ip-tags,
-.capability-tags {
+.capability-tags,
+.used-port-list,
+.server-used-ports {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+.server-used-ports {
+  align-items: center;
+  margin-top: 6px;
+}
+.server-used-ports > span,
+.used-port-panel > span {
+  color: #909399;
+  font-size: 12px;
+}
+.used-port-list {
+  min-height: 24px;
+}
+.used-port-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(92, 241, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(9, 16, 30, 0.42);
 }
 .server-dialog {
   display: flex;

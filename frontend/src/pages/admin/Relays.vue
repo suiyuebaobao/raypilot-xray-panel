@@ -16,14 +16,17 @@
       </div>
     </div>
 
-    <el-table
-      ref="relaysTableRef"
-      :data="relays"
-      border
-      style="width: 100%"
-      v-loading="loading"
-      @selection-change="handleRelaySelectionChange"
-    >
+    <div class="admin-table-scroll">
+      <el-table
+        ref="relaysTableRef"
+        :data="relays"
+        border
+        :fit="false"
+        scrollbar-always-on
+        style="width: 100%"
+        v-loading="loading"
+        @selection-change="handleRelaySelectionChange"
+      >
       <el-table-column type="selection" width="48" />
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="name" label="中转名称" min-width="140" />
@@ -61,7 +64,7 @@
       <el-table-column prop="last_heartbeat_at" label="最后心跳" width="180">
         <template #default="{ row }">{{ row.last_heartbeat_at ? formatDate(row.last_heartbeat_at) : '-' }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="360">
+      <el-table-column label="操作" width="360" fixed="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" text @click="showBackendsDialog(row)">管理后端</el-button>
           <el-button size="small" @click="showEditDialog(row)">编辑</el-button>
@@ -69,7 +72,8 @@
           <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑中转' : '新增中转'" width="600px">
       <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
@@ -297,7 +301,8 @@
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
 import { adminApi } from '@/api'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
 import { CircleCheck, CircleClose, Loading } from '@element-plus/icons-vue'
 
 const relays = ref([])
@@ -875,6 +880,10 @@ onMounted(() => {
   color: #606266;
   font-size: 14px;
 }
+.admin-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
 .relation-cell {
   display: flex;
   flex-wrap: wrap;
@@ -904,18 +913,18 @@ onMounted(() => {
   justify-content: center;
 }
 .target-host-cell span {
-  color: #303133;
+  color: var(--rp-cyan);
   font-size: 13px;
   word-break: break-all;
 }
 .target-host-cell small {
-  color: #909399;
+  color: var(--rp-muted);
   font-size: 12px;
 }
 .deploy-steps {
   margin-top: 16px;
   padding: 12px;
-  background: #f5f7fa;
+  background: rgba(9, 16, 30, 0.62);
   border-radius: 4px;
   max-height: 300px;
   overflow-y: auto;

@@ -711,6 +711,65 @@ func nodeListenIPForHost(host string) string {
 	return "0.0.0.0"
 }
 
+func listenEndpointKey(ip string, port uint32) string {
+	return fmt.Sprintf("%s:%d", strings.TrimSpace(ip), port)
+}
+
+func nodePortConflictError(endpoint string) *response.AppError {
+	return &response.AppError{
+		Code:     40011,
+		HTTPCode: http.StatusBadRequest,
+		Message:  fmt.Sprintf("节点入口 %s 已被同一物理服务器上的其他线路占用", endpoint),
+	}
+}
+
+func listenEndpointsOverlap(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	return a == b || a == "" || b == "" || a == "0.0.0.0" || b == "0.0.0.0" || a == "::" || b == "::"
+}
+
+func (h *AdminNodeHandler) checkListenEndpointAvailable(ctx context.Context, nodeHostID *uint64, agentBaseURL string, listenIP string, port uint32, excludeNodeID uint64) error {
+	if h == nil || h.nodeRepo == nil || port == 0 {
+		return nil
+	}
+	nodes := make([]model.Node, 0)
+	seenNodeIDs := map[uint64]struct{}{}
+	appendNodes := func(items []model.Node) {
+		for _, node := range items {
+			if _, ok := seenNodeIDs[node.ID]; ok {
+				continue
+			}
+			seenNodeIDs[node.ID] = struct{}{}
+			nodes = append(nodes, node)
+		}
+	}
+	if nodeHostID != nil && *nodeHostID != 0 {
+		items, err := h.nodeRepo.FindByNodeHostID(ctx, *nodeHostID, false)
+		if err != nil {
+			return err
+		}
+		appendNodes(items)
+	}
+	if strings.TrimSpace(agentBaseURL) != "" {
+		items, err := h.nodeRepo.FindByAgentBaseURL(ctx, agentBaseURL, false)
+		if err != nil {
+			return err
+		}
+		appendNodes(items)
+	}
+	endpoint := listenEndpointKey(listenIP, port)
+	for _, node := range nodes {
+		if excludeNodeID != 0 && node.ID == excludeNodeID {
+			continue
+		}
+		if node.Port == port && listenEndpointsOverlap(node.ListenIP, listenIP) {
+			return nodePortConflictError(endpoint)
+		}
+	}
+	return nil
+}
+
 func normalizeOptionalNodeIPv4(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" || strings.EqualFold(value, "auto") {
@@ -804,7 +863,7 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 		listenIP := nodeListenIPForHost(req.Host)
 		nodes := make([]*model.Node, 0, len(options))
 		createdNodeIDs := make([]uint64, 0, len(options))
-		seenPorts := map[uint32]struct{}{}
+		seenEndpoints := map[string]struct{}{}
 		cleanup := func() {
 			for _, id := range createdNodeIDs {
 				_ = h.nodeRepo.Delete(c.Request.Context(), id)
@@ -822,12 +881,18 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 			for optionIndex, option := range options {
 				optionCopy := option
 				optionCopy.Port += uint32(proxyIndex)
-				if _, ok := seenPorts[optionCopy.Port]; ok {
+				endpoint := listenEndpointKey(listenIP, optionCopy.Port)
+				if _, ok := seenEndpoints[endpoint]; ok {
 					cleanup()
 					response.HandleError(c, response.ErrBadRequest)
 					return
 				}
-				seenPorts[optionCopy.Port] = struct{}{}
+				if err := h.checkListenEndpointAvailable(c.Request.Context(), nodeHostID, req.AgentBaseURL, listenIP, optionCopy.Port, 0); err != nil {
+					cleanup()
+					response.HandleError(c, err)
+					return
+				}
+				seenEndpoints[endpoint] = struct{}{}
 				var outboundProxyURL *string
 				if strings.TrimSpace(proxyURL) != "" {
 					trimmed := strings.TrimSpace(proxyURL)
@@ -896,6 +961,7 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 		OutboundType:     normalizeNodeOutboundType(req.OutboundType),
 		UDPEnabled:       normalizeNodeUDPEnabled(req.OutboundType, req.UDPEnabled),
 		Host:             req.Host,
+		ListenIP:         nodeListenIPForHost(req.Host),
 		ServerName:       req.ServerName,
 		PublicKey:        req.PublicKey,
 		ShortID:          req.ShortID,
@@ -914,6 +980,10 @@ func (h *AdminNodeHandler) Create(c *gin.Context) {
 		node.OutboundIP = nodeListenIPForHost(req.Host)
 	}
 	applyNodeTransportOption(node, options[0])
+	if err := h.checkListenEndpointAvailable(c.Request.Context(), nodeHostID, req.AgentBaseURL, node.ListenIP, node.Port, 0); err != nil {
+		response.HandleError(c, err)
+		return
+	}
 	node, err = h.nodeRepo.Create(c.Request.Context(), node)
 	if err != nil {
 		response.HandleError(c, response.ErrInternalServer)
@@ -969,6 +1039,7 @@ func (h *AdminNodeHandler) Update(c *gin.Context) {
 		node.Transport = req.Transport
 	}
 	node.Host = req.Host
+	node.ListenIP = nodeListenIPForHost(req.Host)
 	if ip := normalizeOptionalNodeIPv4(req.OutboundIP); ip != "" {
 		node.OutboundIP = ip
 	} else if node.OutboundType == model.NodeOutboundDirect {
@@ -978,6 +1049,10 @@ func (h *AdminNodeHandler) Update(c *gin.Context) {
 	}
 	if req.Port != 0 {
 		node.Port = req.Port
+	}
+	if err := h.checkListenEndpointAvailable(c.Request.Context(), node.NodeHostID, node.AgentBaseURL, node.ListenIP, node.Port, node.ID); err != nil {
+		response.HandleError(c, err)
+		return
 	}
 	node.ServerName = req.ServerName
 	node.PublicKey = req.PublicKey

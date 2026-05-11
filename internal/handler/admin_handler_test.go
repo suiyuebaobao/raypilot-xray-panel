@@ -975,6 +975,268 @@ func TestAdminHandler_CreateNode_AttachesToExistingNodeHost(t *testing.T) {
 	assert.Equal(t, host.ID, *node.NodeHostID)
 }
 
+func TestAdminHandler_CreateNode_RejectsDuplicateListenEndpointOnSameNodeHost(t *testing.T) {
+	r, adminToken, db := setupTestAdminAppWithDB(t)
+	host := &model.NodeHost{
+		Name:           "host-port-conflict",
+		SSHHost:        "203.0.113.88",
+		SSHPort:        22,
+		AgentBaseURL:   "http://203.0.113.88:8080",
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}
+	require.NoError(t, db.Create(host).Error)
+	require.NoError(t, db.Create(&model.Node{
+		Name:           "existing-line",
+		Protocol:       "vless",
+		Transport:      "tcp",
+		Host:           "203.0.113.88",
+		ListenIP:       "203.0.113.88",
+		Port:           443,
+		NodeHostID:     &host.ID,
+		AgentBaseURL:   host.AgentBaseURL,
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}).Error)
+
+	body := map[string]interface{}{
+		"name":           "duplicate-line",
+		"protocol":       "vless",
+		"host":           "203.0.113.88",
+		"port":           443,
+		"transport":      "tcp",
+		"node_host_id":   host.ID,
+		"server_name":    "www.microsoft.com",
+		"agent_base_url": host.AgentBaseURL,
+		"is_enabled":     true,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/nodes", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "203.0.113.88:443")
+}
+
+func TestAdminHandler_CreateNode_AllowsSamePortOnDifferentListenIPs(t *testing.T) {
+	r, adminToken, db := setupTestAdminAppWithDB(t)
+	host := &model.NodeHost{
+		Name:           "host-multi-ip",
+		SSHHost:        "203.0.113.88",
+		SSHPort:        22,
+		AgentBaseURL:   "http://203.0.113.88:8080",
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}
+	require.NoError(t, db.Create(host).Error)
+	require.NoError(t, db.Create(&model.Node{
+		Name:           "existing-line",
+		Protocol:       "vless",
+		Transport:      "tcp",
+		Host:           "203.0.113.88",
+		ListenIP:       "203.0.113.88",
+		Port:           443,
+		NodeHostID:     &host.ID,
+		AgentBaseURL:   host.AgentBaseURL,
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}).Error)
+
+	body := map[string]interface{}{
+		"name":           "second-ip-line",
+		"protocol":       "vless",
+		"host":           "203.0.113.89",
+		"port":           443,
+		"transport":      "tcp",
+		"node_host_id":   host.ID,
+		"server_name":    "www.microsoft.com",
+		"agent_base_url": host.AgentBaseURL,
+		"is_enabled":     true,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/nodes", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(t, "203.0.113.89", data["listen_ip"])
+	assert.Equal(t, float64(443), data["port"])
+}
+
+func TestAdminHandler_UpdateNode_RejectsDuplicateListenEndpointOnSameNodeHost(t *testing.T) {
+	r, adminToken, db := setupTestAdminAppWithDB(t)
+	host := &model.NodeHost{
+		Name:           "host-update-port-conflict",
+		SSHHost:        "203.0.113.88",
+		SSHPort:        22,
+		AgentBaseURL:   "http://203.0.113.88:8080",
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}
+	require.NoError(t, db.Create(host).Error)
+	first := &model.Node{
+		Name:           "first-line",
+		Protocol:       "vless",
+		Transport:      "tcp",
+		Host:           "203.0.113.88",
+		ListenIP:       "203.0.113.88",
+		Port:           443,
+		NodeHostID:     &host.ID,
+		AgentBaseURL:   host.AgentBaseURL,
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}
+	second := &model.Node{
+		Name:           "second-line",
+		Protocol:       "vless",
+		Transport:      "xhttp",
+		Host:           "203.0.113.88",
+		ListenIP:       "203.0.113.88",
+		Port:           8443,
+		NodeHostID:     &host.ID,
+		AgentBaseURL:   host.AgentBaseURL,
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}
+	require.NoError(t, db.Create(first).Error)
+	require.NoError(t, db.Create(second).Error)
+
+	body := map[string]interface{}{
+		"name":           "second-line",
+		"protocol":       "vless",
+		"host":           "203.0.113.88",
+		"port":           443,
+		"transport":      "xhttp",
+		"server_name":    "www.microsoft.com",
+		"agent_base_url": host.AgentBaseURL,
+		"is_enabled":     true,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/admin/nodes/%d", second.ID), bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "203.0.113.88:443")
+}
+
+func TestAdminHandler_CreateNode_RejectsDuplicateListenEndpointByAgentBaseURL(t *testing.T) {
+	r, adminToken, db := setupTestAdminAppWithDB(t)
+	require.NoError(t, db.Create(&model.Node{
+		Name:           "existing-agent-line",
+		Protocol:       "vless",
+		Transport:      "tcp",
+		Host:           "203.0.113.88",
+		ListenIP:       "203.0.113.88",
+		Port:           443,
+		AgentBaseURL:   "http://203.0.113.88:8080",
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}).Error)
+
+	body := map[string]interface{}{
+		"name":           "duplicate-agent-line",
+		"protocol":       "vless",
+		"host":           "203.0.113.88",
+		"port":           443,
+		"transport":      "tcp",
+		"server_name":    "www.microsoft.com",
+		"agent_base_url": "http://203.0.113.88:8080",
+		"agent_token":    "new-token",
+		"is_enabled":     true,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/nodes", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "203.0.113.88:443")
+}
+
+func TestAdminHandler_CreateNode_RejectsWildcardListenEndpointOverlap(t *testing.T) {
+	r, adminToken, db := setupTestAdminAppWithDB(t)
+	require.NoError(t, db.Create(&model.Node{
+		Name:           "wildcard-line",
+		Protocol:       "vless",
+		Transport:      "tcp",
+		Host:           "edge.example.com",
+		ListenIP:       "0.0.0.0",
+		Port:           443,
+		AgentBaseURL:   "http://203.0.113.88:8080",
+		AgentTokenHash: "hash",
+		IsEnabled:      true,
+	}).Error)
+
+	body := map[string]interface{}{
+		"name":           "specific-ip-line",
+		"protocol":       "vless",
+		"host":           "203.0.113.88",
+		"port":           443,
+		"transport":      "tcp",
+		"server_name":    "www.microsoft.com",
+		"agent_base_url": "http://203.0.113.88:8080",
+		"agent_token":    "new-token",
+		"is_enabled":     true,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/nodes", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "203.0.113.88:443")
+}
+
+func TestAdminHandler_CreateNode_SetsListenIPForSingleLogicalNode(t *testing.T) {
+	r, adminToken := setupTestAdminApp(t)
+
+	body := map[string]interface{}{
+		"name":           "single-listen-ip",
+		"protocol":       "vless",
+		"host":           "203.0.113.90",
+		"port":           25443,
+		"transport":      "tcp",
+		"server_name":    "www.microsoft.com",
+		"public_key":     "test-public-key-listen-ip-1234567890",
+		"short_id":       "1a2b3c4d",
+		"fingerprint":    "chrome",
+		"line_mode":      "direct_only",
+		"agent_base_url": "http://203.0.113.90:18080",
+		"agent_token":    "single-listen-ip-token",
+		"is_enabled":     true,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/nodes", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(t, "203.0.113.90", data["listen_ip"])
+	assert.Equal(t, "203.0.113.90", data["outbound_ip"])
+}
+
 func TestAdminHandler_CreateNode_XHTTPNormalizesTransport(t *testing.T) {
 	r, token := setupTestAdminApp(t)
 

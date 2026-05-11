@@ -305,6 +305,10 @@ type deployTransportOption struct {
 	Flow      string
 }
 
+func listenEndpointKey(ip string, port uint32) string {
+	return fmt.Sprintf("%s:%d", strings.TrimSpace(ip), port)
+}
+
 func normalizeDeployOutboundProxyURLs(outboundType string, raw string) []string {
 	if normalizeDeployOutboundType(outboundType) != model.NodeOutboundSocks5 {
 		return []string{""}
@@ -838,17 +842,18 @@ func (s *NodeDeployService) deployMultiLine(ctx context.Context, req *DeployRequ
 	addStep("创建主机记录", "success", fmt.Sprintf("物理主机已创建 (ID: %d)", nodeHost.ID))
 
 	nodeConfigs := make([]MultiExitNodeConfig, 0, len(selectedIPs)*len(options))
-	seenPorts := map[uint32]struct{}{}
 	for i, ip := range selectedIPs {
 		listenIP := deployListenIP(req.MultiIPEnabled, ip)
+		seenEndpoints := map[string]struct{}{}
 		for proxyIndex, proxyURL := range proxyURLs {
 			for j, option := range options {
 				optionCopy := option
 				optionCopy.Port += uint32(proxyIndex)
-				if _, ok := seenPorts[optionCopy.Port]; ok {
-					return fail("创建节点记录失败: duplicate listen port %d", optionCopy.Port)
+				endpoint := listenEndpointKey(listenIP, optionCopy.Port)
+				if _, ok := seenEndpoints[endpoint]; ok {
+					return fail("创建节点记录失败: duplicate listen endpoint %s", endpoint)
 				}
-				seenPorts[optionCopy.Port] = struct{}{}
+				seenEndpoints[endpoint] = struct{}{}
 				nodeName := deployProxyNodeName(req.NodeName, ip, proxyIndex, len(proxyURLs), optionCopy, len(options))
 				node := &model.Node{
 					Name:           nodeName,

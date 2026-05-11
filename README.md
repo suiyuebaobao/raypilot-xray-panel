@@ -13,7 +13,7 @@ RayPilot is a self-hosted control panel for Xray-core proxy and VPN-like service
 
 English keywords: xray panel, xray-core panel, vless reality panel, vpn panel, vpn management panel, vpn subscription panel, self-hosted vpn, proxy panel, proxy subscription system, subscription panel, clash subscription, mihomo subscription, shadowrocket subscription, relay node, traffic accounting, node-agent, self-hosted proxy.
 
-![RayPilot admin dashboard](assets/screenshots/admin-dashboard.png)
+![RayPilot sales landing page](assets/screenshots/sales-landing.png)
 
 ## Why RayPilot
 
@@ -31,6 +31,10 @@ English keywords: xray panel, xray-core panel, vless reality panel, vpn panel, v
 - MySQL migrations, Docker Compose, Nginx, and systemd deployment examples
 
 ## Screenshots
+
+| Sales landing | Platform page |
+| --- | --- |
+| ![Sales landing](assets/screenshots/sales-landing.png) | ![Platform landing](assets/screenshots/platform-landing.png) |
 
 | Admin dashboard | Exit nodes |
 | --- | --- |
@@ -56,29 +60,33 @@ English keywords: xray panel, xray-core panel, vless reality panel, vpn panel, v
 | --- | --- |
 | ![Generated redeem codes](assets/screenshots/admin-redeem-code-generated.png) | ![Subscription token management](assets/screenshots/admin-subscription-tokens.png) |
 
-| Admin orders | Log center |
+| Admin orders | Sales landing editor |
 | --- | --- |
-| ![Admin orders](assets/screenshots/admin-orders.png) | ![Admin log center](assets/screenshots/admin-logs.png) |
+| ![Admin orders](assets/screenshots/admin-orders.png) | ![Sales landing editor](assets/screenshots/admin-sales-landing.png) |
 
-| User home | User subscription |
+| Log center | User home |
 | --- | --- |
-| ![User home](assets/screenshots/user-home.png) | ![User subscription](assets/screenshots/user-subscription.png) |
+| ![Admin log center](assets/screenshots/admin-logs.png) | ![User home](assets/screenshots/user-home.png) |
 
-| User plans | User orders |
+| User subscription | User plans |
 | --- | --- |
-| ![User plans](assets/screenshots/user-plans.png) | ![User orders](assets/screenshots/user-orders.png) |
+| ![User subscription](assets/screenshots/user-subscription.png) | ![User plans](assets/screenshots/user-plans.png) |
 
-| User redeem | User profile |
+| User orders | User redeem |
 | --- | --- |
-| ![User redeem](assets/screenshots/user-redeem.png) | ![User profile](assets/screenshots/user-profile.png) |
+| ![User orders](assets/screenshots/user-orders.png) | ![User redeem](assets/screenshots/user-redeem.png) |
 
-| Login and register | Mobile subscription |
+| User profile | Login |
 | --- | --- |
-| ![User login](assets/screenshots/user-login.png) | ![Mobile user subscription](assets/screenshots/mobile-user-subscription.png) |
+| ![User profile](assets/screenshots/user-profile.png) | ![User login](assets/screenshots/user-login.png) |
 
-| User registration | Admin login |
+| Register | Mobile subscription |
 | --- | --- |
-| ![User registration](assets/screenshots/user-register.png) | ![Admin login](assets/screenshots/admin-login.png) |
+| ![User registration](assets/screenshots/user-register.png) | ![Mobile user subscription](assets/screenshots/mobile-user-subscription.png) |
+
+| Admin login |  |
+| --- | --- |
+| ![Admin login](assets/screenshots/admin-login.png) |  |
 
 ## Tech Stack
 

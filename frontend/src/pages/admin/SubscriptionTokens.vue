@@ -116,7 +116,8 @@
 // 管理后台 - 订阅 Token 管理页。
 import { ref, reactive, onMounted } from 'vue'
 import { adminApi } from '@/api'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
 
 const tokens = ref([])
 const users = ref([])

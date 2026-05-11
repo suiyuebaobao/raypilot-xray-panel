@@ -32,7 +32,8 @@
 // 套餐列表页。展示上架中的套餐，用户可选择购买。
 import { ref, onMounted } from 'vue'
 import { planApi } from '@/api'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
@@ -107,34 +108,49 @@ onMounted(() => {
   min-height: 200px;
 }
 .plan-card {
+  position: relative;
+  overflow: hidden;
   text-align: center;
   margin-bottom: 20px;
 }
+.plan-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(66, 245, 255, 0.12), transparent 32%, rgba(255, 61, 242, 0.1));
+  opacity: 0.7;
+}
 .plan-name {
+  position: relative;
   font-size: 18px;
-  font-weight: bold;
+  font-weight: 800;
   margin-bottom: 8px;
+  color: var(--rp-text);
 }
 .plan-price {
+  position: relative;
   margin-bottom: 16px;
 }
 .plan-price .amount {
   font-size: 28px;
-  font-weight: bold;
-  color: #409eff;
+  font-weight: 800;
+  color: var(--rp-cyan);
+  text-shadow: 0 0 16px rgba(66, 245, 255, 0.28);
 }
 .plan-price .currency {
   font-size: 14px;
-  color: #606266;
+  color: var(--rp-muted);
   margin-left: 4px;
 }
 .plan-features {
+  position: relative;
   list-style: none;
   padding: 0;
   margin: 0 0 12px;
   text-align: left;
   font-size: 14px;
-  color: #606266;
+  color: #bfd3e4;
 }
 .plan-features li {
   padding: 4px 0;

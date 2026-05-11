@@ -13,14 +13,17 @@
       </div>
     </div>
 
-    <el-table
-      ref="plansTableRef"
-      :data="plans"
-      border
-      style="width: 100%"
-      v-loading="loading"
-      @selection-change="handlePlanSelectionChange"
-    >
+    <div class="admin-table-scroll">
+      <el-table
+        ref="plansTableRef"
+        :data="plans"
+        border
+        :fit="false"
+        scrollbar-always-on
+        style="width: 100%"
+        v-loading="loading"
+        @selection-change="handlePlanSelectionChange"
+      >
       <el-table-column type="selection" width="48" :selectable="canSelectPlan" />
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="name" label="套餐名称" min-width="170">
@@ -70,13 +73,14 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180">
+      <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="showEditDialog(row)">编辑</el-button>
           <el-button size="small" type="danger" :disabled="row.is_default" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </div>
 
     <div class="pagination" style="margin-top: 16px; text-align: right">
       <el-pagination
@@ -148,7 +152,8 @@
 // 新增功能：套餐关联节点分组管理。
 import { computed, ref, reactive, onMounted } from 'vue'
 import { adminApi } from '@/api'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
 
 const plans = ref([])
 const loading = ref(false)
@@ -466,6 +471,10 @@ onMounted(async () => {
   background: #f5f7fa;
   color: #606266;
   font-size: 14px;
+}
+.admin-table-scroll {
+  width: 100%;
+  overflow-x: auto;
 }
 .plan-name-cell {
   display: flex;

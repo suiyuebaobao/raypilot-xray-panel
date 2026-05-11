@@ -34,7 +34,7 @@
 // 管理后台 - 订单管理页。v1 阶段为骨架，展示订单列表。
 import { ref, onMounted } from 'vue'
 import { adminApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 
 const orders = ref([])
 const page = ref(1)

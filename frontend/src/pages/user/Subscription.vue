@@ -33,7 +33,13 @@
           <el-descriptions-item label="家宽流量">{{ formatBytes(subscription.residential_used_traffic) }} / {{ formatBytes(subscription.residential_traffic_limit) }}</el-descriptions-item>
         </el-descriptions>
         <div class="progress-wrap">
-          <el-progress :percentage="trafficPercent" :color="trafficColor" :stroke-width="12" />
+          <div v-for="pool in trafficPools" :key="pool.key" class="traffic-progress">
+            <div class="traffic-progress-head">
+              <span>{{ pool.label }}进度</span>
+              <small>{{ formatBytes(pool.used) }} / {{ formatBytes(pool.limit) }}</small>
+            </div>
+            <el-progress :percentage="pool.percent" :color="trafficColor(pool.percent)" :stroke-width="12" />
+          </div>
         </div>
       </el-card>
 
@@ -160,7 +166,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import { userApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 
 const subscription = ref(null)
 const usageData = ref(null)
@@ -178,16 +184,38 @@ const subscriptionFormats = [
 const selectedSubscriptionUrl = computed(() => subscriptionUrl(selectedFormat.value))
 const selectedFormatLabel = computed(() => subscriptionFormats.find((item) => item.value === selectedFormat.value)?.label || 'Clash / mihomo')
 
-const trafficPercent = computed(() => {
-  if (!subscription.value || !subscription.value.traffic_limit) return 0
-  return Math.min(100, Math.round((subscription.value.used_traffic / subscription.value.traffic_limit) * 100))
+const trafficPools = computed(() => {
+  if (!subscription.value) return []
+  return [
+    {
+      key: 'normal',
+      label: '普通流量',
+      used: subscription.value.used_traffic || 0,
+      limit: subscription.value.traffic_limit || 0,
+    },
+    {
+      key: 'residential',
+      label: '家宽流量',
+      used: subscription.value.residential_used_traffic || 0,
+      limit: subscription.value.residential_traffic_limit || 0,
+    },
+  ].map((pool) => ({
+    ...pool,
+    percent: trafficPercent(pool.used, pool.limit),
+  }))
 })
 
-const trafficColor = computed(() => {
-  if (trafficPercent.value > 90) return '#f56c6c'
-  if (trafficPercent.value > 70) return '#e6a23c'
-  return '#409eff'
-})
+function trafficPercent(used, limit) {
+  const total = Number(limit || 0)
+  if (!total) return 0
+  return Math.min(100, Math.round((Number(used || 0) / total) * 100))
+}
+
+function trafficColor(percent) {
+  if (percent > 90) return '#f56c6c'
+  if (percent > 70) return '#e6a23c'
+  return '#42f5ff'
+}
 
 const statusTagType = computed(() => {
   switch (subscription.value?.status) {
@@ -285,6 +313,17 @@ onMounted(() => {
 .progress-wrap {
   margin-top: 16px;
 }
+.traffic-progress + .traffic-progress {
+  margin-top: 12px;
+}
+.traffic-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  color: var(--rp-muted);
+  font-size: 13px;
+}
 .usage-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -292,22 +331,20 @@ onMounted(() => {
   margin-bottom: 14px;
 }
 .usage-metric {
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
   padding: 12px;
   min-width: 0;
 }
 .usage-metric span,
 .usage-metric small {
   display: block;
-  color: #909399;
+  color: var(--rp-muted);
 }
 .usage-metric strong {
   display: block;
   font-size: 20px;
   line-height: 28px;
   margin: 4px 0;
-  color: #303133;
+  color: var(--rp-cyan);
 }
 .sub-links {
   display: flex;
@@ -322,8 +359,6 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: #f5f7fa;
-  border-radius: 4px;
 }
 .link-label {
   font-weight: bold;
@@ -334,7 +369,7 @@ onMounted(() => {
   flex: 1;
   font-family: monospace;
   font-size: 12px;
-  color: #606266;
+  color: #bfd3e4;
   word-break: break-all;
 }
 @media (max-width: 900px) {

@@ -83,6 +83,17 @@ func TestNormalizeDeployTransportOptions_RejectsDuplicatePorts(t *testing.T) {
 	require.Contains(t, err.Error(), "不能使用同一个端口")
 }
 
+func TestListenEndpointKey_AllowsSamePortOnDifferentIPs(t *testing.T) {
+	endpoints := map[string]struct{}{}
+	for _, ip := range []string{"154.219.97.219", "156.238.231.16"} {
+		endpoints[listenEndpointKey(ip, 443)] = struct{}{}
+	}
+
+	require.Len(t, endpoints, 2)
+	require.Contains(t, endpoints, "154.219.97.219:443")
+	require.Contains(t, endpoints, "156.238.231.16:443")
+}
+
 func TestNormalizeDeployUint64IDs_DedupesAndSorts(t *testing.T) {
 	ids, err := normalizeDeployUint64IDs([]uint64{3, 1, 3, 2})
 

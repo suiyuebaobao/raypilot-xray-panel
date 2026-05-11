@@ -629,6 +629,59 @@ const operationLogs = [
   },
 ]
 
+const salesLandingConfig = {
+  brand: 'RayPilot',
+  nav_links: [
+    { label: '套餐', to: '#plans' },
+    { label: '节点', to: '#nodes' },
+    { label: '说明', to: '#faq' },
+    { label: '登录', to: '/login' },
+  ],
+  badges: ['高速节点', '稳定订阅', '按量流量'],
+  title: '高速 VPN 节点',
+  subtitle: '面向 AI、游戏、跨境办公和日常网络访问，提供多地区出口、专属订阅链接和清晰的流量管理。',
+  primary_cta: { label: '立即开通', to: '/register' },
+  secondary_cta: { label: '已有账号登录', to: '/login' },
+  trust_tags: ['VLESS Reality', 'XHTTP 可选', 'Clash / Mihomo 订阅'],
+  hero_nodes: [
+    { flag: 'HK', name: '香港入口', desc: '低延迟中转', latency: '35ms' },
+    { flag: 'US', name: '美国出口', desc: 'AI / 海外服务', latency: '128ms' },
+    { flag: 'SG', name: '新加坡备用', desc: '亚洲优化', latency: '68ms' },
+  ],
+  selling_points: [
+    { no: '01', title: '多地区高速节点', text: '按地区和线路能力下发订阅，支持直连与中转线路，减少单点不稳定带来的影响。' },
+    { no: '02', title: '流量清晰可查', text: '用户中心展示套餐、剩余流量和订阅链接，用多少、剩多少一目了然。' },
+    { no: '03', title: '客户端导入简单', text: '支持 Clash / Mihomo 等常见客户端订阅格式，复制订阅链接即可导入使用。' },
+  ],
+  plans: [
+    { tag: 'STARTER', name: '轻量流量', price: '按套餐', unit: '灵活开通', action: '开始使用', featured: false, features: ['适合临时访问和轻量使用', '标准节点订阅', '用户中心自助查看'] },
+    { tag: 'POPULAR', name: '高速节点', price: '推荐', unit: '日常主力', action: '选择推荐', featured: true, features: ['适合 AI、办公和影音访问', '多线路订阅', '支持流量池计费'] },
+    { tag: 'PRO', name: '大流量套餐', price: '长期', unit: '高频使用', action: '开通套餐', featured: false, features: ['适合多设备和长期使用', '更多流量额度', '可配合兑换码续费'] },
+  ],
+  use_cases: [
+    { title: 'AI 工具访问', text: '为海外 AI 服务准备稳定出口线路。' },
+    { title: '游戏加速', text: '选择低延迟地区节点，减少跨境链路波动。' },
+    { title: '跨境办公', text: '让资料查询、远程协作和海外服务访问更顺畅。' },
+    { title: '多设备订阅', text: '同一账号管理套餐和订阅链接，使用更方便。' },
+  ],
+  faqs: [
+    { q: '购买后怎么使用？', a: '注册并开通套餐后，在用户中心复制订阅链接，导入 Clash Verge Rev、Mihomo 等客户端即可使用。' },
+    { q: '流量怎么计算？', a: '系统会按套餐规则统计已用流量和剩余流量，不同套餐可能有不同的计费倍率。' },
+    { q: '支持哪些节点模式？', a: '当前系统支持 VLESS Reality、TCP、XHTTP 和中转线路，具体以下发订阅为准。' },
+  ],
+  final_cta: {
+    title: '现在开通 RayPilot 节点服务',
+    text: '注册账号后进入用户中心，选择套餐或兑换码开通订阅。',
+    button_label: '创建账号',
+    button_to: '/register',
+    footer_links: [
+      { label: '用户登录', to: '/login' },
+      { label: '平台能力', to: '/platform' },
+    ],
+  },
+  footer_text: 'RayPilot VPN 节点与流量服务',
+}
+
 const json = (data) => ({
   success: true,
   message: 'ok',
@@ -777,6 +830,9 @@ async function installDemoApi(page, persona = 'user') {
     }
     if (pathname === '/api/plans') {
       return fulfillJson(route, json({ plans: plans.filter((item) => item.is_active && !item.is_deleted) }))
+    }
+    if (pathname === '/api/site/sales-landing' || pathname === '/api/admin/site/sales-landing') {
+      return fulfillJson(route, json(salesLandingConfig))
     }
     if (pathname === '/api/redeem') {
       return fulfillJson(route, json({ subscription: { ...subscription, expire_date: iso('2026-07-03T23:59:59Z') } }))
@@ -987,6 +1043,7 @@ async function main() {
       ['admin-orders', '/admin/orders', '订单管理'],
       ['admin-redeem-codes', '/admin/redeem-codes', '兑换码管理'],
       ['admin-subscription-tokens', '/admin/subscription-tokens', '订阅 Token 管理'],
+      ['admin-sales-landing', '/admin/sales-landing', '销售首页'],
       ['admin-logs', '/admin/logs', '日志中心'],
     ]
 
@@ -1052,7 +1109,9 @@ async function main() {
     await installDemoApi(userPage, 'user')
 
     const userPages = [
-      ['user-home', '/', '欢迎使用 RayPilot'],
+      ['sales-landing', '/', '高速 VPN 节点'],
+      ['platform-landing', '/platform', 'RayPilot'],
+      ['user-home', '/dashboard', '欢迎使用 RayPilot'],
       ['user-subscription', '/subscription', '我的订阅'],
       ['user-plans', '/plans', '套餐列表'],
       ['user-orders', '/orders', '我的订单'],

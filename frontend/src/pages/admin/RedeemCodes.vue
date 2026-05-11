@@ -84,7 +84,7 @@
 // 管理后台 - 兑换码管理页。
 import { ref, reactive, computed, onMounted } from 'vue'
 import { adminApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 
 const codes = ref([])
 const plans = ref([])

@@ -38,7 +38,7 @@
 // 用户个人资料页 — 修改资料和密码。
 import { ref, reactive, onMounted } from 'vue'
 import { userApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()

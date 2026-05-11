@@ -1,7 +1,14 @@
 <template>
-  <div class="login-page">
-    <el-card class="login-card">
-      <h2>管理后台登录</h2>
+  <div class="login-page cyber-auth">
+    <div class="auth-orbit"></div>
+    <el-card class="login-card cyber-card">
+      <div class="brand-lockup">
+        <span class="brand-chip">RP</span>
+        <div>
+          <h2>管理后台登录</h2>
+          <p>进入 RayPilot 控制中枢</p>
+        </div>
+      </div>
       <el-form :model="form" :rules="rules" ref="formRef" @submit.prevent="handleLogin">
         <el-form-item prop="username">
           <el-input v-model="form.username" placeholder="管理员用户名" prefix-icon="User" size="large" />
@@ -25,7 +32,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { authApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -72,19 +79,77 @@ async function handleLogin() {
 
 <style scoped>
 .login-page {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: #304156;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(66, 245, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(66, 245, 255, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 22% 22%, rgba(66, 245, 255, 0.24), transparent 30rem),
+    radial-gradient(circle at 80% 70%, rgba(255, 61, 242, 0.2), transparent 28rem),
+    #050814;
+  background-size: 34px 34px, 34px 34px, auto, auto;
+}
+.login-page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(transparent 50%, rgba(66, 245, 255, 0.025) 50%);
+  background-size: 100% 4px;
+}
+.auth-orbit {
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border: 1px solid rgba(66, 245, 255, 0.14);
+  border-radius: 50%;
+  box-shadow: 0 0 80px rgba(66, 245, 255, 0.12), inset 0 0 80px rgba(255, 61, 242, 0.08);
+}
+.auth-orbit::before,
+.auth-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 54px;
+  border: 1px dashed rgba(255, 61, 242, 0.18);
+  border-radius: 50%;
+}
+.auth-orbit::after {
+  inset: 116px;
+  border-color: rgba(66, 245, 255, 0.2);
 }
 .login-card {
-  width: 400px;
+  width: min(420px, calc(100vw - 32px));
+  z-index: 1;
+}
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.brand-chip {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  color: #061019;
+  font-weight: 900;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--rp-cyan), var(--rp-pink));
+  box-shadow: 0 0 24px rgba(66, 245, 255, 0.36);
 }
 .login-card h2 {
-  text-align: center;
-  margin-bottom: 24px;
-  color: #304156;
+  margin: 0;
+  color: var(--rp-text);
+}
+.login-card p {
+  margin: 4px 0 0;
+  color: var(--rp-muted);
+  font-size: 13px;
 }
 .login-card .el-form-item {
   margin-bottom: 20px;

@@ -265,6 +265,25 @@ func TestLoadMultiNodeConfig_AllowsSameIPWithDifferentPorts(t *testing.T) {
 	}
 }
 
+func TestLoadMultiNodeConfig_AllowsDifferentIPsWithSamePort(t *testing.T) {
+	t.Setenv("MULTI_NODE_CONFIG", `[
+		{"node_id": 1, "ip": "154.219.106.105", "port": 443, "transport": "tcp"},
+		{"node_id": 2, "ip": "154.219.106.106", "port": 443, "transport": "tcp"}
+	]`)
+	t.Setenv("MULTI_NODE_CONFIG_PATH", "")
+
+	nodes, err := loadMultiNodeConfig()
+	if err != nil {
+		t.Fatalf("loadMultiNodeConfig returned error: %v", err)
+	}
+	if len(nodes) != 2 {
+		t.Fatalf("len(nodes) = %d, want 2", len(nodes))
+	}
+	if nodes[0].Port != 443 || nodes[1].Port != 443 || nodes[0].IP == nodes[1].IP {
+		t.Fatalf("nodes = %+v, want two different IPs on port 443", nodes)
+	}
+}
+
 func TestLoadMultiNodeConfig_NormalizesOutboundIP(t *testing.T) {
 	t.Setenv("MULTI_NODE_CONFIG", `[
 		{"node_id": 1, "ip": "0.0.0.0", "port": 443, "outbound_type": "socks5", "outbound_ip": " 203.0.113.88 ", "outbound_proxy_url": "socks5://u:p@example.com:3010"},
@@ -329,7 +348,7 @@ func TestBuildMultiExitXrayConfigMap_Socks5Outbound(t *testing.T) {
 			Transport:         "tcp",
 			OutboundType:      "socks5",
 			OutboundIP:        "203.0.113.88",
-			OutboundProxyURL:  "socks5://user:pass@us.arxlabs.io:3010",
+			OutboundProxyURL:  "socks5://user:pass@upstream.example.net:3010",
 			InboundTag:        "node_150_in",
 			OutboundTag:       "node_150_out",
 			XrayUserKeyPrefix: "node_150__",
@@ -362,8 +381,8 @@ func TestBuildMultiExitXrayConfigMap_Socks5Outbound(t *testing.T) {
 	settings := target["settings"].(map[string]interface{})
 	servers := settings["servers"].([]interface{})
 	server := servers[0].(map[string]interface{})
-	if server["address"] != "us.arxlabs.io" {
-		t.Fatalf("address = %#v, want us.arxlabs.io", server["address"])
+	if server["address"] != "upstream.example.net" {
+		t.Fatalf("address = %#v, want upstream.example.net", server["address"])
 	}
 	if server["port"] != 3010 {
 		t.Fatalf("port = %#v, want 3010", server["port"])

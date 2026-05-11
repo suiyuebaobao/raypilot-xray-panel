@@ -267,6 +267,39 @@ func escapeLike(value string) string {
 	return replacer.Replace(value)
 }
 
+// SiteSettingRepository 站点配置数据访问。
+type SiteSettingRepository struct {
+	db *gorm.DB
+}
+
+func NewSiteSettingRepository(db *gorm.DB) *SiteSettingRepository {
+	return &SiteSettingRepository{db: db}
+}
+
+func (r *SiteSettingRepository) FindByKey(ctx context.Context, key string) (*model.SiteSetting, error) {
+	var setting model.SiteSetting
+	err := r.db.WithContext(ctx).Where("setting_key = ?", key).First(&setting).Error
+	if err != nil {
+		return nil, err
+	}
+	return &setting, nil
+}
+
+func (r *SiteSettingRepository) Upsert(ctx context.Context, key string, value string) (*model.SiteSetting, error) {
+	setting := &model.SiteSetting{
+		Key:   key,
+		Value: value,
+	}
+	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "setting_key"}},
+		DoUpdates: clause.AssignmentColumns([]string{"setting_value", "updated_at"}),
+	}).Create(setting).Error
+	if err != nil {
+		return nil, err
+	}
+	return r.FindByKey(ctx, key)
+}
+
 // OperationLogRepository 操作日志数据访问。
 type OperationLogRepository struct {
 	db *gorm.DB
@@ -1685,6 +1718,21 @@ func (r *NodeRepository) FindByID(ctx context.Context, id uint64) (*model.Node, 
 func (r *NodeRepository) FindByNodeHostID(ctx context.Context, nodeHostID uint64, enabledOnly bool) ([]model.Node, error) {
 	var nodes []model.Node
 	q := r.db.WithContext(ctx).Where("node_host_id = ?", nodeHostID)
+	if enabledOnly {
+		q = q.Where("is_enabled = ?", true)
+	}
+	err := q.Order("sort_weight ASC, id ASC").Find(&nodes).Error
+	return nodes, err
+}
+
+// FindByAgentBaseURL 查询使用同一个 agent 地址的逻辑出口节点。
+func (r *NodeRepository) FindByAgentBaseURL(ctx context.Context, agentBaseURL string, enabledOnly bool) ([]model.Node, error) {
+	var nodes []model.Node
+	agentBaseURL = strings.TrimSpace(agentBaseURL)
+	if agentBaseURL == "" {
+		return nodes, nil
+	}
+	q := r.db.WithContext(ctx).Where("agent_base_url = ?", agentBaseURL)
 	if enabledOnly {
 		q = q.Where("is_enabled = ?", true)
 	}
