@@ -130,6 +130,24 @@ suiyue/
 - 日志中不得写入密码、完整 Token、JWT、数据库连接串、SSH 私钥、Reality 私钥；部署请求只能保存脱敏摘要，例如 `node_token_provided` / `relay_token_provided` 布尔值。
 - 修改日志表结构、日志记录入口、日志页面或一键部署日志摘要时，必须同步更新 `开发方案.md`、管理接口文档、运维手册和页面清单，并运行 `go test ./...`、前端构建和 Playwright smoke。
 
+### 节点运营中心规则
+
+- 节点运营中心 v1 已落地 `/admin/node-operations`、`/api/admin/node-operations/summary`、`/api/admin/node-operations/nodes/:id/checks`，用于节点健康度、延迟、负载、故障原因和流量排行展示。
+- 节点运营中心 v1 只做观测和诊断：不得自动停用节点、不得自动隐藏订阅线路、不得直接触发用户禁用；任何自动调度或摘除策略必须作为后续功能单独设计。
+- node-agent 心跳运行指标必须保持向后兼容；旧 agent 不上报 `runtime_metric` 时，中心仍要正常处理心跳、任务领取和流量上报。
+- 健康检查状态必须综合心跳、TCP 端口、流量上报、Xray 运行状态和负载指标。TCP 端口可达只能代表端口通，不得宣称真实 VLESS/Reality/XHTTP 客户端 100% 可用。
+- 节点运营中心流量排行必须来自 `usage_ledgers`，同时区分真实流量 `delta_*` 与扣费流量 `billed_*`，不能用订阅已用量反推节点排行。
+- 修改 node-agent 心跳指标、`node_runtime_metrics`、`node_health_checks`、健康评分、节点运营页面或运营接口时，必须同步更新三份规则文件、`开发方案.md`、管理接口文档、节点代理接口文档、运维手册和页面清单，并运行 `go test ./...`、前端构建和 Playwright smoke。
+
+### 用户级限速规则
+
+- 用户级限速 v1 通过 `user_subscriptions.speed_limit_bps` 配置，单位为 bps，`0` 表示不限速；后台用户订阅编辑必须允许管理员设置 Mbps 并保存为 bps。
+- 限速参数必须随 `UPSERT_USER` 节点访问任务下发到 node-agent，单出口和 multi_exit 都必须支持；用户禁用、删除、套餐过期或超额时必须清理对应本地限速策略。
+- Xray-core 当前不提供稳定的原生按用户 Mbps 限速能力，node-agent v1 必须基于 Xray Stats 的用户级累计流量做滑动窗口平均限速：超过阈值时临时从对应 VLESS inbound 摘除用户，窗口结束后自动恢复用户。
+- 限速只控制出口节点用户连接，不改变订阅生成、不改变套餐流量扣费和 `usage_ledgers` 入账；中转节点不执行用户限速，用户经中转访问时仍由出口节点限速。
+- node-agent 必须把限速策略和运行状态持久化到本地状态文件，重启后继续生效；状态文件不得包含中心 Token、订阅 Token、SSH 密码或 Reality 私钥。
+- 修改 `speed_limit_bps`、限速任务 payload、node-agent 限速执行器或用户订阅编辑页时，必须同步更新三份规则文件、`开发方案.md`、管理接口文档、节点代理接口文档、运维手册和页面清单，并运行 `go test ./...`、前端构建和 Playwright smoke。
+
 ### 节点 Reality 与订阅联调规则
 
 - 涉及 VLESS + Reality 节点、一键部署、订阅生成或节点同步时，必须确认 `nodes.server_name`、`nodes.public_key`、`nodes.short_id` 与节点 `/usr/local/etc/xray/config.json` 中 `realitySettings.serverNames[0]`、`publicKey` 或由 `privateKey` 派生的 PublicKey、`shortIds[0]` 一致。

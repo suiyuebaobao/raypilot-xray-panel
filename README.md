@@ -36,17 +36,17 @@ English keywords: xray panel, xray-core panel, vless reality panel, vpn panel, v
 | --- | --- |
 | ![Sales landing](assets/screenshots/sales-landing.png) | ![Platform landing](assets/screenshots/platform-landing.png) |
 
-| Admin dashboard | Exit nodes |
+| Admin dashboard | Node operations |
 | --- | --- |
-| ![Admin dashboard](assets/screenshots/admin-dashboard.png) | ![Exit node management](assets/screenshots/admin-nodes.png) |
+| ![Admin dashboard](assets/screenshots/admin-dashboard.png) | ![Node operations center](assets/screenshots/admin-node-operations.png) |
 
-| Multi-IP deployment | Residential SOCKS5 nodes |
+| Exit nodes | Multi-IP deployment |
 | --- | --- |
-| ![Multi-IP node deployment](assets/screenshots/admin-node-multi-ip-deploy.png) | ![Residential SOCKS5 node form](assets/screenshots/admin-node-residential-socks5.png) |
+| ![Exit node management](assets/screenshots/admin-nodes.png) | ![Multi-IP node deployment](assets/screenshots/admin-node-multi-ip-deploy.png) |
 
-| Node groups | Relay nodes |
+| Residential SOCKS5 nodes | Node groups |
 | --- | --- |
-| ![Node group management](assets/screenshots/admin-node-groups.png) | ![Relay management](assets/screenshots/admin-relays.png) |
+| ![Residential SOCKS5 node form](assets/screenshots/admin-node-residential-socks5.png) | ![Node group management](assets/screenshots/admin-node-groups.png) |
 
 | Relay deployment | Users |
 | --- | --- |

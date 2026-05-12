@@ -17,6 +17,11 @@ const (
 	TrafficPoolResidential = "residential"
 	NodeOutboundDirect     = "direct"
 	NodeOutboundSocks5     = "socks5"
+	NodeHealthHealthy      = "healthy"
+	NodeHealthDegraded     = "degraded"
+	NodeHealthDown         = "down"
+	NodeHealthDisabled     = "disabled"
+	NodeHealthUnchecked    = "unchecked"
 )
 
 func NormalizeTrafficPool(pool string) string {
@@ -202,6 +207,7 @@ type UserSubscription struct {
 	UsedTraffic             uint64    `gorm:"column:used_traffic" json:"used_traffic"`
 	ResidentialTrafficLimit uint64    `gorm:"column:residential_traffic_limit" json:"residential_traffic_limit"`
 	ResidentialUsedTraffic  uint64    `gorm:"column:residential_used_traffic" json:"residential_used_traffic"`
+	SpeedLimitBps           uint64    `gorm:"column:speed_limit_bps" json:"speed_limit_bps"`
 	Status                  string    `gorm:"column:status;type:varchar(16);index" json:"status"`
 	ActiveUserID            *uint64   `gorm:"column:active_user_id;uniqueIndex" json:"-"`
 	CreatedAt               time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
@@ -410,6 +416,49 @@ type Node struct {
 // TableName 指定表名。
 func (Node) TableName() string {
 	return "nodes"
+}
+
+// NodeRuntimeMetric 节点运行指标。
+type NodeRuntimeMetric struct {
+	ID                 uint64    `gorm:"primaryKey;column:id" json:"id"`
+	NodeID             *uint64   `gorm:"column:node_id;index" json:"node_id,omitempty"`
+	NodeHostID         *uint64   `gorm:"column:node_host_id;index" json:"node_host_id,omitempty"`
+	CPUUsagePercent    float64   `gorm:"column:cpu_usage_percent;type:decimal(5,2)" json:"cpu_usage_percent"`
+	MemoryUsagePercent float64   `gorm:"column:memory_usage_percent;type:decimal(5,2)" json:"memory_usage_percent"`
+	DiskUsagePercent   float64   `gorm:"column:disk_usage_percent;type:decimal(5,2)" json:"disk_usage_percent"`
+	Load1              float64   `gorm:"column:load1;type:decimal(8,2)" json:"load1"`
+	Load5              float64   `gorm:"column:load5;type:decimal(8,2)" json:"load5"`
+	Load15             float64   `gorm:"column:load15;type:decimal(8,2)" json:"load15"`
+	TCPConnections     uint32    `gorm:"column:tcp_connections" json:"tcp_connections"`
+	XrayRunning        bool      `gorm:"column:xray_running" json:"xray_running"`
+	XrayUptimeSeconds  *uint64   `gorm:"column:xray_uptime_seconds" json:"xray_uptime_seconds,omitempty"`
+	ObservedAt         time.Time `gorm:"column:observed_at;index" json:"observed_at"`
+	CreatedAt          time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+}
+
+func (NodeRuntimeMetric) TableName() string {
+	return "node_runtime_metrics"
+}
+
+// NodeHealthCheck 节点健康检查结果。
+type NodeHealthCheck struct {
+	ID            uint64    `gorm:"primaryKey;column:id" json:"id"`
+	NodeID        uint64    `gorm:"column:node_id;index" json:"node_id"`
+	Status        string    `gorm:"column:status;type:varchar(16);index" json:"status"`
+	HealthScore   int       `gorm:"column:health_score" json:"health_score"`
+	ReasonCode    string    `gorm:"column:reason_code;type:varchar(64)" json:"reason_code"`
+	ReasonMessage string    `gorm:"column:reason_message;type:varchar(255)" json:"reason_message"`
+	TCPLatencyMS  *int      `gorm:"column:tcp_latency_ms" json:"tcp_latency_ms,omitempty"`
+	TCPReachable  bool      `gorm:"column:tcp_reachable" json:"tcp_reachable"`
+	HeartbeatOK   bool      `gorm:"column:heartbeat_ok" json:"heartbeat_ok"`
+	TrafficOK     bool      `gorm:"column:traffic_ok" json:"traffic_ok"`
+	LoadOK        bool      `gorm:"column:load_ok" json:"load_ok"`
+	CheckedAt     time.Time `gorm:"column:checked_at;index" json:"checked_at"`
+	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+}
+
+func (NodeHealthCheck) TableName() string {
+	return "node_health_checks"
 }
 
 // CreateNodeRequest 创建节点请求。

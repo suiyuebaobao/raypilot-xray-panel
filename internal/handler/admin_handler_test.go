@@ -773,6 +773,43 @@ func TestAdminHandler_CreateNode(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestAdminUserHandler_UpsertSubscription_SavesSpeedLimit(t *testing.T) {
+	r, adminToken, db := setupTestAdminAppWithDB(t)
+
+	user := &model.User{
+		UUID: "speed-user-uuid", Username: "speeduser", PasswordHash: "hashed",
+		XrayUserKey: "speeduser@test.local", Status: "active",
+	}
+	require.NoError(t, db.Create(user).Error)
+	plan := &model.Plan{Name: "speed-plan", Price: 10, TrafficLimit: 10 * 1024 * 1024 * 1024, DurationDays: 30, IsActive: true}
+	require.NoError(t, db.Create(plan).Error)
+
+	body := map[string]interface{}{
+		"plan_id":         plan.ID,
+		"status":          "ACTIVE",
+		"expire_date":     time.Now().AddDate(0, 0, 30).UTC().Format(time.RFC3339),
+		"traffic_limit":   10 * 1024 * 1024 * 1024,
+		"speed_limit_bps": 2_000_000,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/admin/users/%d/subscription", user.ID), bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp["data"].(map[string]interface{})
+	subscription := data["subscription"].(map[string]interface{})
+	assert.Equal(t, float64(2_000_000), subscription["speed_limit_bps"])
+
+	var sub model.UserSubscription
+	require.NoError(t, db.Where("user_id = ?", user.ID).First(&sub).Error)
+	assert.Equal(t, uint64(2_000_000), sub.SpeedLimitBps)
+}
+
 func TestAdminHandler_CreateNode_SavesSocks5Outbound(t *testing.T) {
 	r, adminToken := setupTestAdminApp(t)
 

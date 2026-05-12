@@ -325,13 +325,16 @@ test('admin CRUD APIs and subscription side effects work end to end', async ({ r
         expire_date: futureISO(30),
         traffic_limit: gb(9),
         used_traffic: 12345,
+        speed_limit_bps: 2_000_000,
       },
     })
     expect(updatedSubscription.subscription?.plan_id).toBe(created.planFlowId)
+    expect(updatedSubscription.subscription?.speed_limit_bps).toBe(2_000_000)
     expect(updatedSubscription.tokens?.length).toBeGreaterThan(0)
 
     const subscriptionData = await api(request, adminToken, 'get', `/api/admin/users/${created.userId}/subscription`)
     expect(subscriptionData.subscription?.status).toBe('ACTIVE')
+    expect(subscriptionData.subscription?.speed_limit_bps).toBe(2_000_000)
     expect(subscriptionData.tokens?.length).toBeGreaterThan(0)
     created.tokenId = subscriptionData.tokens[0].id
 
@@ -351,6 +354,7 @@ test('admin CRUD APIs and subscription side effects work end to end', async ({ r
     expect(userRow?.plan_name).toBe(`${prefix}-plan-flow`)
     expect(userRow?.has_active_subscription).toBe(true)
     expect(userRow?.remaining_traffic).toBe(gb(9) - 12345)
+    expect(userRow?.speed_limit_bps).toBe(2_000_000)
 
     const resetTokenData = await api(request, adminToken, 'post', `/api/admin/subscription-tokens/${created.tokenId}/reset`, {
       data: {},

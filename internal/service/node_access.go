@@ -185,6 +185,18 @@ func (s *NodeAccessService) createTasksForSubscriptionWithFilter(ctx context.Con
 			allNodes = append(allNodes, node)
 		}
 	}
+	if len(allNodes) == 0 {
+		return nil
+	}
+
+	var speedLimitBps uint64
+	if action == "UPSERT_USER" && s.subRepo != nil {
+		sub, err := s.subRepo.FindByID(ctx, subID)
+		if err != nil {
+			return fmt.Errorf("find subscription %d: %w", subID, err)
+		}
+		speedLimitBps = sub.SpeedLimitBps
+	}
 
 	// 为每个节点创建任务（包含 payload）
 	var lastErr error
@@ -209,6 +221,9 @@ func (s *NodeAccessService) createTasksForSubscriptionWithFilter(ctx context.Con
 		payloadData["transport"] = transport
 		if flow != "" {
 			payloadData["flow"] = flow
+		}
+		if action == "UPSERT_USER" {
+			payloadData["speed_limit_bps"] = speedLimitBps
 		}
 
 		payloadBytes, _ := json.Marshal(payloadData)
@@ -260,6 +275,16 @@ func (s *NodeAccessService) createTaskForNode(ctx context.Context, nodeID uint64
 	payloadData["transport"] = transport
 	if flow != "" {
 		payloadData["flow"] = flow
+	}
+	if action == "UPSERT_USER" {
+		if s.subRepo == nil {
+			return fmt.Errorf("subRepo is nil")
+		}
+		sub, err := s.subRepo.FindByID(ctx, subID)
+		if err != nil {
+			return fmt.Errorf("find subscription %d: %w", subID, err)
+		}
+		payloadData["speed_limit_bps"] = sub.SpeedLimitBps
 	}
 	payloadBytes, _ := json.Marshal(payloadData)
 	payloadStr := string(payloadBytes)

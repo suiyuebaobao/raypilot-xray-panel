@@ -154,6 +154,39 @@ func TestNodeAccessService_TriggerOnSubscribe_XHTTPPayloadOmitsFlow(t *testing.T
 	assert.Equal(t, "default-user-uuid", payload["uuid"])
 }
 
+func TestNodeAccessService_TriggerOnSubscribe_IncludesSpeedLimit(t *testing.T) {
+	db, svc := setupNodeAccessTest(t)
+	ctx := context.Background()
+
+	nodeGroup := &model.NodeGroup{Name: "speed-group"}
+	require.NoError(t, db.Create(nodeGroup).Error)
+	node := &model.Node{
+		Name: "speed-node", Protocol: "vless", Transport: "tcp",
+		Host: "speed.node.test", Port: 443, ServerName: "www.microsoft.com",
+		AgentBaseURL: "http://node:8080", AgentTokenHash: "hash",
+		NodeGroupID: &nodeGroup.ID, IsEnabled: true,
+	}
+	require.NoError(t, db.Create(node).Error)
+	plan := &model.Plan{Name: "speed-plan", Price: 10, DurationDays: 30, IsActive: true}
+	require.NoError(t, db.Create(plan).Error)
+	require.NoError(t, db.Exec("INSERT INTO plan_node_groups (plan_id, node_group_id) VALUES (?, ?)", plan.ID, nodeGroup.ID).Error)
+	sub := &model.UserSubscription{
+		UserID: 1, PlanID: plan.ID, StartDate: db.NowFunc(),
+		ExpireDate: db.NowFunc().AddDate(0, 0, 30), Status: "ACTIVE",
+		SpeedLimitBps: 2_000_000,
+	}
+	require.NoError(t, db.Create(sub).Error)
+
+	require.NoError(t, svc.TriggerOnSubscribe(ctx, 1, sub.ID, plan.ID))
+
+	var task model.NodeAccessTask
+	require.NoError(t, db.Where("node_id = ? AND action = ?", node.ID, "UPSERT_USER").First(&task).Error)
+	require.NotNil(t, task.Payload)
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(*task.Payload), &payload))
+	assert.Equal(t, float64(2_000_000), payload["speed_limit_bps"])
+}
+
 func TestNodeAccessService_TriggerOnSubscribe_Socks5PayloadOmitsFlow(t *testing.T) {
 	db, svc := setupNodeAccessTest(t)
 	ctx := context.Background()

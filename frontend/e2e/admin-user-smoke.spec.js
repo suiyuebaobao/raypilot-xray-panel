@@ -76,6 +76,7 @@ test('admin and user pages render against live API', async ({ page }) => {
     ['/admin/plans', '套餐管理'],
     ['/admin/node-groups', '节点分组管理'],
     ['/admin/nodes', '节点管理'],
+    ['/admin/node-operations', '节点运营中心'],
     ['/admin/relays', '中转节点管理'],
     ['/admin/users', '用户管理'],
     ['/admin/orders', '订单管理'],
@@ -120,6 +121,14 @@ test('admin and user pages render against live API', async ({ page }) => {
   await deployDialog.getByText('多 IP 服务器').locator('..').locator('.el-switch').click()
   await expect(deployDialog.getByRole('button', { name: '扫描出口 IP' })).toBeVisible()
   await deployDialog.getByRole('button', { name: '取消' }).click()
+
+  await page.goto('/admin/node-operations')
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByText('今日流量排行')).toBeVisible()
+  await expect(page.getByText('本月流量排行')).toBeVisible()
+  await expect(page.getByText('节点健康矩阵')).toBeVisible()
+  await expect(page.getByRole('button', { name: '刷新扫描结果' })).toBeVisible()
+  await expect(page.getByText('总线路')).toBeVisible()
 
   await page.goto('/admin/relays')
   await page.waitForLoadState('networkidle')

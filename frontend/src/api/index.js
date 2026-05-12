@@ -69,6 +69,10 @@ export const adminApi = {
     deploy: (payload) => httpPost('/api/admin/nodes/deploy', payload),
     repairCenter: (payload) => httpPost('/api/admin/nodes/repair-center', payload),
   },
+  nodeOperations: {
+    summary: () => httpGet('/api/admin/node-operations/summary', freshParams()),
+    checks: (id, params) => httpGet(`/api/admin/node-operations/nodes/${id}/checks`, compact(params || {})),
+  },
   relays: {
     list: () => httpGet('/api/admin/relays', freshParams()),
     create: (payload) => httpPost('/api/admin/relays', payload),

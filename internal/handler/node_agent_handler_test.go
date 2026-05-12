@@ -50,6 +50,8 @@ func setupAgentTest(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 		&model.User{},
 		&model.UserSubscription{},
 		&model.Plan{},
+		&model.NodeRuntimeMetric{},
+		&model.NodeHealthCheck{},
 	))
 	db.Exec("CREATE TABLE IF NOT EXISTS plan_node_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, plan_id INTEGER, node_group_id INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
 
@@ -74,6 +76,12 @@ func setupAgentTest(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	)
 
 	agentHandler := handler.NewAgentHandler(nodeAccessSvc, trafficSvc, nodeRepo)
+	agentHandler.SetNodeOperationsService(service.NewNodeOperationsService(
+		nodeRepo,
+		repository.NewNodeRuntimeMetricRepository(db),
+		repository.NewNodeHealthCheckRepository(db),
+		repository.NewUsageLedgerRepository(db),
+	))
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -138,6 +146,35 @@ func TestAgentHandler_Heartbeat(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAgentHandler_Heartbeat_RecordsRuntimeMetric(t *testing.T) {
+	r, _, db := setupAgentTest(t)
+
+	body := map[string]interface{}{
+		"node_id": uint64(1),
+		"token":   "test-node-token",
+		"runtime_metric": map[string]interface{}{
+			"cpu_usage_percent":    11.5,
+			"memory_usage_percent": 22.5,
+			"disk_usage_percent":   33.5,
+			"load1":                1.2,
+			"tcp_connections":      9,
+			"xray_running":         true,
+			"observed_at":          time.Now().UTC().Format(time.RFC3339),
+		},
+	}
+	jsonBody, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/agent/heartbeat", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var metric model.NodeRuntimeMetric
+	require.NoError(t, db.Where("node_id = ?", 1).First(&metric).Error)
+	assert.Equal(t, 11.5, metric.CPUUsagePercent)
+	assert.True(t, metric.XrayRunning)
 }
 
 // TestAgentHandler_TaskResult 测试任务结果上报。

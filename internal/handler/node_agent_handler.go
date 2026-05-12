@@ -25,6 +25,7 @@ import (
 type AgentHandler struct {
 	nodeAccessSvc *service.NodeAccessService
 	trafficSvc    *service.TrafficService
+	nodeOpsSvc    *service.NodeOperationsService
 	nodeRepo      *repository.NodeRepository
 	nodeHostRepo  *repository.NodeHostRepository
 	relaySvc      *service.RelayService
@@ -69,6 +70,11 @@ func NewAgentHandlerWithRelayAndNodeHosts(nodeAccessSvc *service.NodeAccessServi
 	return h
 }
 
+// SetNodeOperationsService 注入节点运营中心服务。
+func (h *AgentHandler) SetNodeOperationsService(nodeOpsSvc *service.NodeOperationsService) {
+	h.nodeOpsSvc = nodeOpsSvc
+}
+
 type multiAgentTask struct {
 	NodeID         uint64 `json:"node_id"`
 	ID             int64  `json:"id"`
@@ -82,9 +88,10 @@ type multiAgentTask struct {
 // 返回待执行任务列表。
 func (h *AgentHandler) Heartbeat(c *gin.Context) {
 	var req struct {
-		NodeID  uint64 `json:"node_id" binding:"required"`
-		Version string `json:"version"`
-		Token   string `json:"token" binding:"required"`
+		NodeID        uint64                      `json:"node_id" binding:"required"`
+		Version       string                      `json:"version"`
+		Token         string                      `json:"token" binding:"required"`
+		RuntimeMetric *service.RuntimeMetricInput `json:"runtime_metric"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, response.ErrBadRequest)
@@ -100,6 +107,9 @@ func (h *AgentHandler) Heartbeat(c *gin.Context) {
 
 	// 更新节点最后心跳时间
 	_ = h.nodeRepo.UpdateHeartbeat(c.Request.Context(), req.NodeID)
+	if h.nodeOpsSvc != nil && req.RuntimeMetric != nil {
+		_ = h.nodeOpsSvc.RecordNodeMetric(c.Request.Context(), req.NodeID, *req.RuntimeMetric)
+	}
 
 	// 获取待执行任务
 	tasks, err := h.nodeAccessSvc.ProcessHeartbeat(c.Request.Context(), req.NodeID)
@@ -213,9 +223,10 @@ func (h *AgentHandler) MultiHeartbeat(c *gin.Context) {
 		return
 	}
 	var req struct {
-		NodeHostID uint64 `json:"node_host_id" binding:"required"`
-		Version    string `json:"version"`
-		Token      string `json:"token" binding:"required"`
+		NodeHostID    uint64                      `json:"node_host_id" binding:"required"`
+		Version       string                      `json:"version"`
+		Token         string                      `json:"token" binding:"required"`
+		RuntimeMetric *service.RuntimeMetricInput `json:"runtime_metric"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, response.ErrBadRequest)
@@ -233,6 +244,9 @@ func (h *AgentHandler) MultiHeartbeat(c *gin.Context) {
 	if err != nil {
 		response.HandleError(c, response.ErrInternalServer)
 		return
+	}
+	if h.nodeOpsSvc != nil && req.RuntimeMetric != nil {
+		_ = h.nodeOpsSvc.RecordNodeHostMetric(c.Request.Context(), req.NodeHostID, nodes, *req.RuntimeMetric)
 	}
 
 	agentTasks := make([]multiAgentTask, 0)

@@ -59,6 +59,8 @@ func main() {
 	relayTaskRepo := repository.NewRelayConfigTaskRepository(db)
 	relayTrafficRepo := repository.NewRelayTrafficSnapshotRepository(db)
 	usageLedgerRepo := repository.NewUsageLedgerRepository(db)
+	nodeMetricRepo := repository.NewNodeRuntimeMetricRepository(db)
+	nodeHealthRepo := repository.NewNodeHealthCheckRepository(db)
 	operationLogRepo := repository.NewOperationLogRepository(db)
 	deploymentLogRepo := repository.NewDeploymentLogRepository(db)
 	siteSettingRepo := repository.NewSiteSettingRepository(db)
@@ -91,9 +93,11 @@ func main() {
 		userRepo,
 		nodeAccessSvc,
 	)
+	nodeOpsSvc := service.NewNodeOperationsService(nodeRepo, nodeMetricRepo, nodeHealthRepo, usageLedgerRepo)
 
 	// 创建 node-agent 通信处理器
 	agentHandler := handler.NewAgentHandlerWithRelayAndNodeHosts(nodeAccessSvc, trafficSvc, nodeRepo, nodeHostRepo, relaySvc, relayTrafficSvc, relayRepo)
+	agentHandler.SetNodeOperationsService(nodeOpsSvc)
 
 	// 创建订阅 Token Handler
 	subTokenHandler := handler.NewAdminSubscriptionTokenHandler(
@@ -127,6 +131,7 @@ func main() {
 	relayDeploySvc := service.NewRelayDeployServiceWithAutomation(relayRepo, relaySvc, nodeRepo, nodeAccessSvc)
 	relayDeployHandler := handler.NewRelayDeployHandler(relayDeploySvc, deploymentLogSvc)
 	adminLogHandler := handler.NewAdminLogHandler(runtimeLogSvc, deploymentLogSvc, operationLogSvc)
+	nodeOpsHandler := handler.NewNodeOperationsHandler(nodeOpsSvc)
 	siteConfigHandler := handler.NewSiteConfigHandler(siteSettingRepo, operationLogSvc)
 
 	// 设置 Gin 模式
@@ -232,6 +237,10 @@ func main() {
 		adminGroup.POST("/nodes/deploy/scan-ips", nodeDeployHandler.ScanIPs)
 		adminGroup.POST("/nodes/deploy", nodeDeployHandler.Deploy)
 		adminGroup.POST("/nodes/repair-center", nodeDeployHandler.RepairCenter)
+
+		// 节点运营中心
+		adminGroup.GET("/node-operations/summary", nodeOpsHandler.Summary)
+		adminGroup.GET("/node-operations/nodes/:id/checks", nodeOpsHandler.NodeChecks)
 
 		// 中转节点管理
 		adminGroup.GET("/relays", adminRelayHandler.List)

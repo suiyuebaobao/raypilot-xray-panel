@@ -1880,6 +1880,13 @@ func (r *NodeRepository) Count(ctx context.Context) (int64, error) {
 	return total, err
 }
 
+// CountEnabled 统计启用节点数量。
+func (r *NodeRepository) CountEnabled(ctx context.Context) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Model(&model.Node{}).Where("is_enabled = ?", true).Count(&total).Error
+	return total, err
+}
+
 // FindByGroupID 根据节点组 ID 查询节点。
 func (r *NodeRepository) FindByGroupID(ctx context.Context, groupID uint64, enabledOnly bool) ([]model.Node, error) {
 	var nodes []model.Node
@@ -1958,6 +1965,130 @@ func (r *NodeRepository) MarkTrafficReportFailure(ctx context.Context, nodeID ui
 			"traffic_error_count":    gorm.Expr("traffic_error_count + ?", 1),
 			"last_traffic_error":     errMsg,
 		}).Error
+}
+
+// NodeRuntimeMetricRepository 节点运行指标数据访问。
+type NodeRuntimeMetricRepository struct {
+	db *gorm.DB
+}
+
+// NewNodeRuntimeMetricRepository 创建节点运行指标 Repository。
+func NewNodeRuntimeMetricRepository(db *gorm.DB) *NodeRuntimeMetricRepository {
+	return &NodeRuntimeMetricRepository{db: db}
+}
+
+// Create 创建运行指标记录。
+func (r *NodeRuntimeMetricRepository) Create(ctx context.Context, metric *model.NodeRuntimeMetric) error {
+	if metric.ObservedAt.IsZero() {
+		metric.ObservedAt = modelNow()
+	}
+	return r.db.WithContext(ctx).Create(metric).Error
+}
+
+// LatestByNodeID 查询单个节点最新运行指标。
+func (r *NodeRuntimeMetricRepository) LatestByNodeID(ctx context.Context, nodeID uint64) (*model.NodeRuntimeMetric, error) {
+	var metric model.NodeRuntimeMetric
+	err := r.db.WithContext(ctx).
+		Where("node_id = ?", nodeID).
+		Order("observed_at DESC, id DESC").
+		First(&metric).Error
+	if err != nil {
+		return nil, err
+	}
+	return &metric, nil
+}
+
+// LatestByNodeIDs 批量查询节点最新运行指标。
+func (r *NodeRuntimeMetricRepository) LatestByNodeIDs(ctx context.Context, nodeIDs []uint64) (map[uint64]model.NodeRuntimeMetric, error) {
+	result := map[uint64]model.NodeRuntimeMetric{}
+	if len(nodeIDs) == 0 {
+		return result, nil
+	}
+	var metrics []model.NodeRuntimeMetric
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT * FROM (
+			SELECT node_runtime_metrics.*,
+			       ROW_NUMBER() OVER (PARTITION BY node_id ORDER BY observed_at DESC, id DESC) AS row_num
+			FROM node_runtime_metrics
+			WHERE node_id IN ?
+		) ranked_metrics
+		WHERE row_num = 1
+		ORDER BY node_id ASC
+	`, nodeIDs).Scan(&metrics).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, metric := range metrics {
+		if metric.NodeID == nil {
+			continue
+		}
+		if _, exists := result[*metric.NodeID]; exists {
+			continue
+		}
+		result[*metric.NodeID] = metric
+	}
+	return result, nil
+}
+
+// NodeHealthCheckRepository 节点健康检查数据访问。
+type NodeHealthCheckRepository struct {
+	db *gorm.DB
+}
+
+// NewNodeHealthCheckRepository 创建节点健康检查 Repository。
+func NewNodeHealthCheckRepository(db *gorm.DB) *NodeHealthCheckRepository {
+	return &NodeHealthCheckRepository{db: db}
+}
+
+// Create 创建健康检查记录。
+func (r *NodeHealthCheckRepository) Create(ctx context.Context, check *model.NodeHealthCheck) error {
+	if check.CheckedAt.IsZero() {
+		check.CheckedAt = modelNow()
+	}
+	return r.db.WithContext(ctx).Create(check).Error
+}
+
+// LatestByNodeIDs 批量查询节点最新健康检查。
+func (r *NodeHealthCheckRepository) LatestByNodeIDs(ctx context.Context, nodeIDs []uint64) (map[uint64]model.NodeHealthCheck, error) {
+	result := map[uint64]model.NodeHealthCheck{}
+	if len(nodeIDs) == 0 {
+		return result, nil
+	}
+	var checks []model.NodeHealthCheck
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT * FROM (
+			SELECT node_health_checks.*,
+			       ROW_NUMBER() OVER (PARTITION BY node_id ORDER BY checked_at DESC, id DESC) AS row_num
+			FROM node_health_checks
+			WHERE node_id IN ?
+		) ranked_checks
+		WHERE row_num = 1
+		ORDER BY node_id ASC
+	`, nodeIDs).Scan(&checks).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, check := range checks {
+		if _, exists := result[check.NodeID]; exists {
+			continue
+		}
+		result[check.NodeID] = check
+	}
+	return result, nil
+}
+
+// RecentByNode 查询单个节点近期健康检查。
+func (r *NodeHealthCheckRepository) RecentByNode(ctx context.Context, nodeID uint64, limit int) ([]model.NodeHealthCheck, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	var checks []model.NodeHealthCheck
+	err := r.db.WithContext(ctx).
+		Where("node_id = ?", nodeID).
+		Order("checked_at DESC, id DESC").
+		Limit(limit).
+		Find(&checks).Error
+	return checks, err
 }
 
 // RelayRepository 中转节点数据访问。
@@ -2721,6 +2852,20 @@ type UsageLedgerWithNode struct {
 	RecordedAt        time.Time `json:"recorded_at"`
 }
 
+// NodeUsageTotal 表示按节点聚合的流量账本。
+type NodeUsageTotal struct {
+	NodeID          uint64  `json:"node_id"`
+	NodeName        *string `json:"node_name,omitempty"`
+	TrafficPool     *string `json:"traffic_pool,omitempty"`
+	Upload          uint64  `json:"upload"`
+	Download        uint64  `json:"download"`
+	Total           uint64  `json:"total"`
+	BilledUpload    uint64  `json:"billed_upload"`
+	BilledDownload  uint64  `json:"billed_download"`
+	BilledTotal     uint64  `json:"billed_total"`
+	ActiveUserCount int64   `json:"active_user_count"`
+}
+
 // NewUsageLedgerRepository 创建流量账本 Repository。
 func NewUsageLedgerRepository(db *gorm.DB) *UsageLedgerRepository {
 	return &UsageLedgerRepository{db: db}
@@ -2779,6 +2924,24 @@ func (r *UsageLedgerRepository) RecentByUser(ctx context.Context, userID uint64,
 	}
 	err := q.Order("ul.recorded_at DESC, ul.id DESC").Limit(limit).Scan(&records).Error
 	return records, err
+}
+
+// SumByNode 汇总指定时间范围内的节点流量排行。
+func (r *UsageLedgerRepository) SumByNode(ctx context.Context, startAt, endAt time.Time, limit int) ([]NodeUsageTotal, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 20
+	}
+	var totals []NodeUsageTotal
+	err := r.db.WithContext(ctx).
+		Table("usage_ledgers AS ul").
+		Select("ul.node_id, nodes.name AS node_name, nodes.traffic_pool AS traffic_pool, COALESCE(SUM(ul.delta_upload), 0) AS upload, COALESCE(SUM(ul.delta_download), 0) AS download, COALESCE(SUM(ul.delta_total), 0) AS total, COALESCE(SUM(CASE WHEN ul.billed_upload > 0 THEN ul.billed_upload ELSE ul.delta_upload END), 0) AS billed_upload, COALESCE(SUM(CASE WHEN ul.billed_download > 0 THEN ul.billed_download ELSE ul.delta_download END), 0) AS billed_download, COALESCE(SUM(CASE WHEN ul.billed_total > 0 THEN ul.billed_total ELSE ul.delta_total END), 0) AS billed_total, COUNT(DISTINCT ul.user_id) AS active_user_count").
+		Joins("LEFT JOIN nodes ON nodes.id = ul.node_id").
+		Where("ul.recorded_at >= ? AND ul.recorded_at < ?", startAt, endAt).
+		Group("ul.node_id, nodes.name, nodes.traffic_pool").
+		Order("billed_total DESC, total DESC").
+		Limit(limit).
+		Scan(&totals).Error
+	return totals, err
 }
 
 // UpdateStatus 更新订阅状态。

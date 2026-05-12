@@ -1287,6 +1287,7 @@ func (h *AdminUserHandler) List(c *gin.Context) {
 				item["used_traffic"] = sub.UsedTraffic
 				item["residential_traffic_limit"] = sub.ResidentialTrafficLimit
 				item["residential_used_traffic"] = sub.ResidentialUsedTraffic
+				item["speed_limit_bps"] = sub.SpeedLimitBps
 				item["traffic_unlimited"] = model.SubscriptionTrafficUnlimitedByPool(sub, model.TrafficPoolNormal)
 				item["remaining_traffic"] = remainingTraffic(sub)
 				item["traffic_usage_percent"] = trafficUsagePercent(sub)
@@ -1611,6 +1612,7 @@ func (h *AdminUserHandler) UpsertSubscription(c *gin.Context) {
 		UsedTraffic             *uint64 `json:"used_traffic"`
 		ResidentialTrafficLimit *uint64 `json:"residential_traffic_limit"`
 		ResidentialUsedTraffic  *uint64 `json:"residential_used_traffic"`
+		SpeedLimitBps           *uint64 `json:"speed_limit_bps"`
 		GenerateToken           bool    `json:"generate_token"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1662,6 +1664,10 @@ func (h *AdminUserHandler) UpsertSubscription(c *gin.Context) {
 		if req.ResidentialUsedTraffic != nil {
 			residentialUsedTraffic = *req.ResidentialUsedTraffic
 		}
+		speedLimitBps := uint64(0)
+		if req.SpeedLimitBps != nil {
+			speedLimitBps = *req.SpeedLimitBps
+		}
 
 		activeUserID := (*uint64)(nil)
 		if req.Status == "ACTIVE" {
@@ -1679,6 +1685,9 @@ func (h *AdminUserHandler) UpsertSubscription(c *gin.Context) {
 			if req.ResidentialUsedTraffic == nil {
 				residentialUsedTraffic = sub.ResidentialUsedTraffic
 			}
+			if req.SpeedLimitBps == nil {
+				speedLimitBps = sub.SpeedLimitBps
+			}
 			updates := map[string]interface{}{
 				"plan_id":                   req.PlanID,
 				"expire_date":               expireDate,
@@ -1686,6 +1695,7 @@ func (h *AdminUserHandler) UpsertSubscription(c *gin.Context) {
 				"used_traffic":              usedTraffic,
 				"residential_traffic_limit": residentialTrafficLimit,
 				"residential_used_traffic":  residentialUsedTraffic,
+				"speed_limit_bps":           speedLimitBps,
 				"status":                    req.Status,
 				"active_user_id":            activeUserID,
 			}
@@ -1705,6 +1715,7 @@ func (h *AdminUserHandler) UpsertSubscription(c *gin.Context) {
 				UsedTraffic:             usedTraffic,
 				ResidentialTrafficLimit: residentialTrafficLimit,
 				ResidentialUsedTraffic:  residentialUsedTraffic,
+				SpeedLimitBps:           speedLimitBps,
 				Status:                  req.Status,
 				ActiveUserID:            activeUserID,
 			}
@@ -1994,6 +2005,7 @@ func subscriptionSummary(sub *model.UserSubscription) gin.H {
 		"used_traffic":              sub.UsedTraffic,
 		"residential_traffic_limit": sub.ResidentialTrafficLimit,
 		"residential_used_traffic":  sub.ResidentialUsedTraffic,
+		"speed_limit_bps":           sub.SpeedLimitBps,
 		"traffic_pools":             subscriptionTrafficPools(sub),
 		"status":                    sub.Status,
 		"created_at":                sub.CreatedAt,

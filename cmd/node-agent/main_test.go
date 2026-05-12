@@ -558,6 +558,104 @@ func TestHandleDisableUser_RemovesTrafficStateAndQueuedItems(t *testing.T) {
 	}
 }
 
+func TestHandleUpsertUser_PersistsSpeedLimitPolicy(t *testing.T) {
+	configPath := writeAgentTestXrayConfig(t, map[string]interface{}{
+		"inbounds": []interface{}{
+			map[string]interface{}{
+				"protocol": "vless",
+				"settings": map[string]interface{}{
+					"clients":    []interface{}{},
+					"decryption": "none",
+				},
+			},
+		},
+	})
+	statePath := filepath.Join(t.TempDir(), "speed_limits.json")
+	agent := NewAgent(&Config{
+		XrayConfigPath: configPath,
+		XrayBinary:     "true",
+		SpeedLimitPath: statePath,
+	})
+
+	errMsg := agent.handleUpsertUser(`{"xray_user_key":"user@example.com","uuid":"00000000-0000-0000-0000-000000000001","speed_limit_bps":2000000}`)
+	if errMsg != "" {
+		t.Fatalf("handleUpsertUser returned %s", errMsg)
+	}
+	policy := agent.speedPolicies["user@example.com"]
+	if policy == nil || policy.SpeedLimitBps != 2_000_000 {
+		t.Fatalf("policy = %+v, want speed 2000000", policy)
+	}
+	raw, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read speed state: %v", err)
+	}
+	if !strings.Contains(string(raw), `"speed_limit_bps": 2000000`) {
+		t.Fatalf("state file missing speed limit: %s", string(raw))
+	}
+}
+
+func TestEnforceSpeedLimitsWithStats_ThrottlesAndRestoresUser(t *testing.T) {
+	configPath := writeAgentTestXrayConfig(t, map[string]interface{}{
+		"inbounds": []interface{}{
+			map[string]interface{}{
+				"protocol": "vless",
+				"settings": map[string]interface{}{
+					"clients": []interface{}{
+						map[string]interface{}{"id": "00000000-0000-0000-0000-000000000001", "email": "user@example.com"},
+					},
+					"decryption": "none",
+				},
+			},
+		},
+	})
+	agent := NewAgent(&Config{
+		XrayConfigPath:     configPath,
+		XrayBinary:         "true",
+		SpeedLimitPath:     filepath.Join(t.TempDir(), "speed_limits.json"),
+		SpeedLimitWindow:   time.Second,
+		SpeedLimitInterval: time.Second,
+	})
+	agent.upsertSpeedPolicy(UserSpeedLimitPolicy{
+		XrayUserKey:   "user@example.com",
+		UUID:          "00000000-0000-0000-0000-000000000001",
+		SpeedLimitBps: 1_000_000,
+	})
+	start := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	agent.enforceSpeedLimitsWithStats(map[string]TrafficItem{
+		"user@example.com": {XrayUserKey: "user@example.com", DownlinkTotal: 100_000},
+	}, start)
+	agent.enforceSpeedLimitsWithStats(map[string]TrafficItem{
+		"user@example.com": {XrayUserKey: "user@example.com", DownlinkTotal: 400_000},
+	}, start.Add(time.Second))
+
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if strings.Contains(string(raw), "user@example.com") {
+		t.Fatalf("user should be throttled and removed from config: %s", string(raw))
+	}
+	policy := agent.speedPolicies["user@example.com"]
+	if policy == nil || !policy.Disabled {
+		t.Fatalf("policy after throttle = %+v, want disabled", policy)
+	}
+
+	agent.enforceSpeedLimitsWithStats(map[string]TrafficItem{
+		"user@example.com": {XrayUserKey: "user@example.com", DownlinkTotal: 400_000},
+	}, start.Add(3*time.Second))
+	raw, err = os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read restored config: %v", err)
+	}
+	if !strings.Contains(string(raw), "user@example.com") {
+		t.Fatalf("user should be restored after window: %s", string(raw))
+	}
+	policy = agent.speedPolicies["user@example.com"]
+	if policy == nil || policy.Disabled {
+		t.Fatalf("policy after restore = %+v, want enabled", policy)
+	}
+}
+
 func TestHandleMultiDisableUser_RemovesLocalTrafficState(t *testing.T) {
 	configPath := writeAgentTestXrayConfig(t, buildMultiExitXrayConfigMap([]MultiExitNodeConfig{{
 		NodeID:            150,

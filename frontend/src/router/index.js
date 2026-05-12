@@ -71,6 +71,7 @@ const routes = [
       { path: 'plans', name: 'AdminPlans', component: () => import('@/pages/admin/Plans.vue') },
       { path: 'node-groups', name: 'AdminNodeGroups', component: () => import('@/pages/admin/NodeGroups.vue') },
       { path: 'nodes', name: 'AdminNodes', component: () => import('@/pages/admin/Nodes.vue') },
+      { path: 'node-operations', name: 'AdminNodeOperations', component: () => import('@/pages/admin/NodeOperations.vue') },
       { path: 'relays', name: 'AdminRelays', component: () => import('@/pages/admin/Relays.vue') },
       { path: 'users', name: 'AdminUsers', component: () => import('@/pages/admin/Users.vue') },
       { path: 'orders', name: 'AdminOrders', component: () => import('@/pages/admin/Orders.vue') },

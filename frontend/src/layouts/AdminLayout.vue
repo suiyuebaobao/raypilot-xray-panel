@@ -23,6 +23,10 @@
           <el-icon><Monitor /></el-icon>
           <span>出口节点</span>
         </el-menu-item>
+        <el-menu-item index="/admin/node-operations">
+          <el-icon><Monitor /></el-icon>
+          <span>节点运营</span>
+        </el-menu-item>
         <el-menu-item index="/admin/relays">
           <el-icon><Connection /></el-icon>
           <span>中转节点</span>

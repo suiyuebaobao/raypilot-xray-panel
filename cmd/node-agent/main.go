@@ -92,35 +92,38 @@ func getIntEnv(key string, defaultVal int) int {
 
 // Config node-agent 配置。
 type Config struct {
-	CenterServerURL   string // 中心服务 API 地址
-	CenterServerURLs  []string
-	AgentRole         string // exit 或 relay
-	NodeID            uint64 // 节点 ID
-	NodeToken         string // 节点鉴权 Token（明文传输，服务端只保存哈希）
-	NodePort          uint32 // 单出口节点监听端口
-	NodeTransport     string // 单出口节点传输层：tcp 或 xhttp
-	OutboundType      string // 单出口节点出站方式：direct 或 socks5
-	OutboundIP        string // 单出口节点出站源 IP；socks5 时表示连接上游代理的本机源 IP
-	OutboundProxyURL  string // 单出口节点上游 socks5 地址
-	XHTTPPath         string // XHTTP 请求路径
-	XHTTPHost         string // XHTTP Host
-	XHTTPMode         string // XHTTP 模式
-	NodeHostID        uint64 // 物理节点服务器 ID（multi_exit 模式）
-	NodeHostToken     string // 物理节点服务器 Token（multi_exit 模式）
-	MultiNodes        []MultiExitNodeConfig
-	RelayID           uint64        // 中转节点 ID
-	RelayToken        string        // 中转节点鉴权 Token
-	XrayConfigPath    string        // xray-core 配置文件路径
-	XrayRestartCmd    string        // 重启 xray-core 的命令
-	XrayAPIServer     string        // xray-core API 地址，用于 statsquery
-	XrayBinary        string        // xray 可执行文件路径
-	HAProxyConfigPath string        // HAProxy 配置文件路径
-	HAProxyPIDPath    string        // HAProxy PID 文件路径
-	HAProxyStatsPath  string        // HAProxy stats socket 路径
-	HeartbeatInterval time.Duration // 心跳间隔
-	ReportInterval    time.Duration // 流量上报间隔
-	TrafficQueuePath  string        // 流量上报失败队列文件
-	TrafficQueueLimit int           // 流量上报失败队列最大长度
+	CenterServerURL    string // 中心服务 API 地址
+	CenterServerURLs   []string
+	AgentRole          string // exit 或 relay
+	NodeID             uint64 // 节点 ID
+	NodeToken          string // 节点鉴权 Token（明文传输，服务端只保存哈希）
+	NodePort           uint32 // 单出口节点监听端口
+	NodeTransport      string // 单出口节点传输层：tcp 或 xhttp
+	OutboundType       string // 单出口节点出站方式：direct 或 socks5
+	OutboundIP         string // 单出口节点出站源 IP；socks5 时表示连接上游代理的本机源 IP
+	OutboundProxyURL   string // 单出口节点上游 socks5 地址
+	XHTTPPath          string // XHTTP 请求路径
+	XHTTPHost          string // XHTTP Host
+	XHTTPMode          string // XHTTP 模式
+	NodeHostID         uint64 // 物理节点服务器 ID（multi_exit 模式）
+	NodeHostToken      string // 物理节点服务器 Token（multi_exit 模式）
+	MultiNodes         []MultiExitNodeConfig
+	RelayID            uint64        // 中转节点 ID
+	RelayToken         string        // 中转节点鉴权 Token
+	XrayConfigPath     string        // xray-core 配置文件路径
+	XrayRestartCmd     string        // 重启 xray-core 的命令
+	XrayAPIServer      string        // xray-core API 地址，用于 statsquery
+	XrayBinary         string        // xray 可执行文件路径
+	HAProxyConfigPath  string        // HAProxy 配置文件路径
+	HAProxyPIDPath     string        // HAProxy PID 文件路径
+	HAProxyStatsPath   string        // HAProxy stats socket 路径
+	HeartbeatInterval  time.Duration // 心跳间隔
+	ReportInterval     time.Duration // 流量上报间隔
+	TrafficQueuePath   string        // 流量上报失败队列文件
+	TrafficQueueLimit  int           // 流量上报失败队列最大长度
+	SpeedLimitPath     string        // 用户限速本地状态文件
+	SpeedLimitInterval time.Duration // 用户限速检查间隔
+	SpeedLimitWindow   time.Duration // 超速后临时摘除窗口
 }
 
 const defaultHAProxyStatsSocketPath = "/tmp/haproxy.sock"
@@ -129,20 +132,23 @@ const defaultXrayAPIServer = "127.0.0.1:10085"
 // loadConfig 从环境变量加载配置。
 func loadConfig() *Config {
 	cfg := &Config{
-		CenterServerURL:   strings.TrimSpace(getEnv("CENTER_SERVER_URL", "")),
-		CenterServerURLs:  parseCenterServerURLs(getEnv("CENTER_SERVER_URLS", ""), getEnv("CENTER_SERVER_URL", "")),
-		AgentRole:         getEnv("AGENT_ROLE", "exit"),
-		XrayConfigPath:    getEnv("XRAY_CONFIG_PATH", "/etc/xray/config.json"),
-		XrayRestartCmd:    getEnv("XRAY_RESTART_CMD", "systemctl restart xray"),
-		XrayAPIServer:     getEnv("XRAY_API_SERVER", defaultXrayAPIServer),
-		XrayBinary:        getEnv("XRAY_BINARY", "xray"),
-		HAProxyConfigPath: getEnv("HAPROXY_CONFIG_PATH", "/etc/haproxy/haproxy.cfg"),
-		HAProxyPIDPath:    getEnv("HAPROXY_PID_PATH", "/tmp/haproxy.pid"),
-		HAProxyStatsPath:  getEnv("HAPROXY_STATS_SOCKET_PATH", defaultHAProxyStatsSocketPath),
-		HeartbeatInterval: getDurationEnv("HEARTBEAT_INTERVAL", 10*time.Second),
-		ReportInterval:    getDurationEnv("REPORT_INTERVAL", 60*time.Second),
-		TrafficQueuePath:  getEnv("TRAFFIC_QUEUE_PATH", ""),
-		TrafficQueueLimit: getIntEnv("TRAFFIC_QUEUE_LIMIT", 720),
+		CenterServerURL:    strings.TrimSpace(getEnv("CENTER_SERVER_URL", "")),
+		CenterServerURLs:   parseCenterServerURLs(getEnv("CENTER_SERVER_URLS", ""), getEnv("CENTER_SERVER_URL", "")),
+		AgentRole:          getEnv("AGENT_ROLE", "exit"),
+		XrayConfigPath:     getEnv("XRAY_CONFIG_PATH", "/etc/xray/config.json"),
+		XrayRestartCmd:     getEnv("XRAY_RESTART_CMD", "systemctl restart xray"),
+		XrayAPIServer:      getEnv("XRAY_API_SERVER", defaultXrayAPIServer),
+		XrayBinary:         getEnv("XRAY_BINARY", "xray"),
+		HAProxyConfigPath:  getEnv("HAPROXY_CONFIG_PATH", "/etc/haproxy/haproxy.cfg"),
+		HAProxyPIDPath:     getEnv("HAPROXY_PID_PATH", "/tmp/haproxy.pid"),
+		HAProxyStatsPath:   getEnv("HAPROXY_STATS_SOCKET_PATH", defaultHAProxyStatsSocketPath),
+		HeartbeatInterval:  getDurationEnv("HEARTBEAT_INTERVAL", 10*time.Second),
+		ReportInterval:     getDurationEnv("REPORT_INTERVAL", 60*time.Second),
+		TrafficQueuePath:   getEnv("TRAFFIC_QUEUE_PATH", ""),
+		TrafficQueueLimit:  getIntEnv("TRAFFIC_QUEUE_LIMIT", 720),
+		SpeedLimitPath:     getEnv("SPEED_LIMIT_STATE_PATH", ""),
+		SpeedLimitInterval: getDurationEnv("SPEED_LIMIT_INTERVAL", 5*time.Second),
+		SpeedLimitWindow:   getDurationEnv("SPEED_LIMIT_WINDOW", 10*time.Second),
 	}
 
 	if len(cfg.CenterServerURLs) == 0 {
@@ -439,9 +445,10 @@ func (n MultiExitNodeConfig) centerXrayUserKey(localKey string) string {
 
 // HeartbeatReq 心跳请求。
 type HeartbeatReq struct {
-	NodeID  uint64 `json:"node_id"`
-	Version string `json:"version"`
-	Token   string `json:"token"`
+	NodeID        uint64         `json:"node_id"`
+	Version       string         `json:"version"`
+	Token         string         `json:"token"`
+	RuntimeMetric *RuntimeMetric `json:"runtime_metric,omitempty"`
 }
 
 // HeartbeatResp 心跳响应。
@@ -496,11 +503,49 @@ type TrafficReportBatch struct {
 	Items       []TrafficItem `json:"items"`
 }
 
+// UserSpeedLimitPolicy 是 node-agent 本地保存的用户级限速策略。
+type UserSpeedLimitPolicy struct {
+	XrayUserKey   string    `json:"xray_user_key"`
+	UUID          string    `json:"uuid"`
+	Flow          string    `json:"flow,omitempty"`
+	InboundTag    string    `json:"inbound_tag,omitempty"`
+	SpeedLimitBps uint64    `json:"speed_limit_bps"`
+	Disabled      bool      `json:"disabled,omitempty"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// UserSpeedLimitState 是滑动窗口限速的运行状态。
+type UserSpeedLimitState struct {
+	LastTotalBytes uint64    `json:"last_total_bytes"`
+	LastCheckedAt  time.Time `json:"last_checked_at"`
+	ThrottledUntil time.Time `json:"throttled_until,omitempty"`
+}
+
+type speedLimitStateFile struct {
+	Policies []UserSpeedLimitPolicy         `json:"policies"`
+	States   map[string]UserSpeedLimitState `json:"states"`
+}
+
 // MultiHeartbeatReq 单 agent 多出口节点心跳请求。
 type MultiHeartbeatReq struct {
-	NodeHostID uint64 `json:"node_host_id"`
-	Version    string `json:"version"`
-	Token      string `json:"token"`
+	NodeHostID    uint64         `json:"node_host_id"`
+	Version       string         `json:"version"`
+	Token         string         `json:"token"`
+	RuntimeMetric *RuntimeMetric `json:"runtime_metric,omitempty"`
+}
+
+// RuntimeMetric 是 node-agent 心跳附带的运行指标。
+type RuntimeMetric struct {
+	CPUUsagePercent    float64   `json:"cpu_usage_percent"`
+	MemoryUsagePercent float64   `json:"memory_usage_percent"`
+	DiskUsagePercent   float64   `json:"disk_usage_percent"`
+	Load1              float64   `json:"load1"`
+	Load5              float64   `json:"load5"`
+	Load15             float64   `json:"load15"`
+	TCPConnections     uint32    `json:"tcp_connections"`
+	XrayRunning        bool      `json:"xray_running"`
+	XrayUptimeSeconds  *uint64   `json:"xray_uptime_seconds,omitempty"`
+	ObservedAt         time.Time `json:"observed_at"`
 }
 
 // MultiTaskResultReq 单 agent 多出口节点任务结果上报请求。
@@ -617,23 +662,30 @@ type VLESSClient struct {
 
 // Agent node-agent 主控制器。
 type Agent struct {
-	cfg          *Config
-	httpClient   *http.Client
-	centerMu     sync.RWMutex
-	centerIndex  int
-	mu           sync.RWMutex
-	traffic      map[string]*TrafficItem // xrayUserKey -> traffic
-	queueMu      sync.Mutex
-	trafficQueue []TrafficReportBatch
-	reporting    int32
+	cfg           *Config
+	httpClient    *http.Client
+	centerMu      sync.RWMutex
+	centerIndex   int
+	cpuMu         sync.Mutex
+	lastCPUStats  *cpuSample
+	mu            sync.RWMutex
+	traffic       map[string]*TrafficItem // xrayUserKey -> traffic
+	queueMu       sync.Mutex
+	trafficQueue  []TrafficReportBatch
+	reporting     int32
+	speedMu       sync.Mutex
+	speedPolicies map[string]*UserSpeedLimitPolicy
+	speedStates   map[string]*UserSpeedLimitState
 }
 
 // NewAgent 创建 agent 实例。
 func NewAgent(cfg *Config) *Agent {
 	return &Agent{
-		cfg:        cfg,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		traffic:    make(map[string]*TrafficItem),
+		cfg:           cfg,
+		httpClient:    &http.Client{Timeout: 30 * time.Second},
+		traffic:       make(map[string]*TrafficItem),
+		speedPolicies: make(map[string]*UserSpeedLimitPolicy),
+		speedStates:   make(map[string]*UserSpeedLimitState),
 	}
 }
 
@@ -1559,6 +1611,7 @@ func (a *Agent) Run() {
 	// 加载初始流量快照
 	a.loadTrafficSnapshot()
 	a.loadTrafficQueue()
+	a.loadSpeedLimitState()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1568,6 +1621,7 @@ func (a *Agent) Run() {
 
 	// 启动流量采集
 	go a.trafficCollectLoop(ctx)
+	go a.speedLimitLoop(ctx)
 
 	// 等待终止信号
 	quit := make(chan os.Signal, 1)
@@ -1603,12 +1657,14 @@ func (a *Agent) runMultiExit() {
 
 	a.loadTrafficSnapshot()
 	a.loadTrafficQueue()
+	a.loadSpeedLimitState()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	go a.multiHeartbeatLoop(ctx)
 	go a.trafficCollectLoop(ctx)
+	go a.speedLimitLoop(ctx)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -1922,9 +1978,10 @@ func (a *Agent) heartbeatLoop(ctx context.Context) {
 // doHeartbeat 执行一次心跳。
 func (a *Agent) doHeartbeat(ctx context.Context) {
 	reqBody := HeartbeatReq{
-		NodeID:  a.cfg.NodeID,
-		Version: "1.0.0",
-		Token:   a.cfg.NodeToken,
+		NodeID:        a.cfg.NodeID,
+		Version:       "1.0.0",
+		Token:         a.cfg.NodeToken,
+		RuntimeMetric: a.collectRuntimeMetric(),
 	}
 
 	var resp HeartbeatResp
@@ -1963,9 +2020,10 @@ func (a *Agent) multiHeartbeatLoop(ctx context.Context) {
 
 func (a *Agent) doMultiHeartbeat(ctx context.Context) {
 	reqBody := MultiHeartbeatReq{
-		NodeHostID: a.cfg.NodeHostID,
-		Version:    "1.0.0",
-		Token:      a.cfg.NodeHostToken,
+		NodeHostID:    a.cfg.NodeHostID,
+		Version:       "1.0.0",
+		Token:         a.cfg.NodeHostToken,
+		RuntimeMetric: a.collectRuntimeMetric(),
 	}
 
 	var resp HeartbeatResp
@@ -2057,10 +2115,11 @@ func (a *Agent) executeTask(ctx context.Context, task AgentTask) {
 // payload 格式：{"xray_user_key":"user@domain","uuid":"xxx-xxx-xxx"}
 func (a *Agent) handleUpsertUser(payload string) string {
 	var p struct {
-		XrayUserKey string `json:"xray_user_key"`
-		UUID        string `json:"uuid"`
-		Flow        string `json:"flow"`
-		Transport   string `json:"transport"`
+		XrayUserKey   string `json:"xray_user_key"`
+		UUID          string `json:"uuid"`
+		Flow          string `json:"flow"`
+		Transport     string `json:"transport"`
+		SpeedLimitBps uint64 `json:"speed_limit_bps"`
 	}
 	if err := json.Unmarshal([]byte(payload), &p); err != nil {
 		return fmt.Sprintf("invalid payload: %v", err)
@@ -2075,6 +2134,12 @@ func (a *Agent) handleUpsertUser(payload string) string {
 	if err := a.addVLESSClient(p.UUID, p.XrayUserKey, p.Flow); err != nil {
 		return fmt.Sprintf("add vless client failed: %v", err)
 	}
+	a.upsertSpeedPolicy(UserSpeedLimitPolicy{
+		XrayUserKey:   p.XrayUserKey,
+		UUID:          p.UUID,
+		Flow:          p.Flow,
+		SpeedLimitBps: p.SpeedLimitBps,
+	})
 
 	// 初始化流量计数器
 	a.mu.Lock()
@@ -2088,10 +2153,11 @@ func (a *Agent) handleUpsertUser(payload string) string {
 
 func (a *Agent) handleMultiUpsertUser(nodeID uint64, payload string) string {
 	var p struct {
-		XrayUserKey string `json:"xray_user_key"`
-		UUID        string `json:"uuid"`
-		Flow        string `json:"flow"`
-		Transport   string `json:"transport"`
+		XrayUserKey   string `json:"xray_user_key"`
+		UUID          string `json:"uuid"`
+		Flow          string `json:"flow"`
+		Transport     string `json:"transport"`
+		SpeedLimitBps uint64 `json:"speed_limit_bps"`
 	}
 	if err := json.Unmarshal([]byte(payload), &p); err != nil {
 		return fmt.Sprintf("invalid payload: %v", err)
@@ -2113,6 +2179,13 @@ func (a *Agent) handleMultiUpsertUser(nodeID uint64, payload string) string {
 	if err := a.addVLESSClientToInbound(node.InboundTag, p.UUID, localKey, p.Flow); err != nil {
 		return fmt.Sprintf("add vless client failed: %v", err)
 	}
+	a.upsertSpeedPolicy(UserSpeedLimitPolicy{
+		XrayUserKey:   localKey,
+		UUID:          p.UUID,
+		Flow:          p.Flow,
+		InboundTag:    node.InboundTag,
+		SpeedLimitBps: p.SpeedLimitBps,
+	})
 	a.mu.Lock()
 	a.traffic[localKey] = &TrafficItem{XrayUserKey: localKey}
 	a.mu.Unlock()
@@ -2133,6 +2206,7 @@ func (a *Agent) handleDisableUser(payload string) string {
 		return fmt.Sprintf("remove vless client failed: %v", err)
 	}
 	a.removeTrafficState(p.XrayUserKey)
+	a.removeSpeedPolicy(p.XrayUserKey)
 
 	return ""
 }
@@ -2153,6 +2227,7 @@ func (a *Agent) handleMultiDisableUser(nodeID uint64, payload string) string {
 		return fmt.Sprintf("remove vless client failed: %v", err)
 	}
 	a.removeTrafficState(localKey)
+	a.removeSpeedPolicy(localKey)
 	return ""
 }
 
@@ -2194,6 +2269,247 @@ func (a *Agent) removeTrafficState(xrayUserKey string) {
 	a.queueMu.Unlock()
 
 	a.saveTrafficSnapshot()
+}
+
+func (a *Agent) speedLimitPath() string {
+	if strings.TrimSpace(a.cfg.SpeedLimitPath) != "" {
+		return a.cfg.SpeedLimitPath
+	}
+	return filepath.Join(filepath.Dir(a.cfg.XrayConfigPath), "speed_limits.json")
+}
+
+func (a *Agent) upsertSpeedPolicy(policy UserSpeedLimitPolicy) {
+	key := strings.TrimSpace(policy.XrayUserKey)
+	if key == "" {
+		return
+	}
+	policy.XrayUserKey = key
+	policy.UpdatedAt = time.Now().UTC()
+
+	a.speedMu.Lock()
+	if policy.SpeedLimitBps == 0 {
+		delete(a.speedPolicies, key)
+		delete(a.speedStates, key)
+	} else {
+		policy.Disabled = false
+		a.speedPolicies[key] = &policy
+		if _, ok := a.speedStates[key]; !ok {
+			a.speedStates[key] = &UserSpeedLimitState{}
+		}
+	}
+	a.saveSpeedLimitStateLocked()
+	a.speedMu.Unlock()
+}
+
+func (a *Agent) removeSpeedPolicy(xrayUserKey string) {
+	key := strings.TrimSpace(xrayUserKey)
+	if key == "" {
+		return
+	}
+	a.speedMu.Lock()
+	delete(a.speedPolicies, key)
+	delete(a.speedStates, key)
+	a.saveSpeedLimitStateLocked()
+	a.speedMu.Unlock()
+}
+
+func (a *Agent) loadSpeedLimitState() {
+	path := a.speedLimitPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("[agent] load speed limit state failed: %v", err)
+		}
+		return
+	}
+	var state speedLimitStateFile
+	if err := json.Unmarshal(data, &state); err != nil {
+		log.Printf("[agent] parse speed limit state failed: %v", err)
+		return
+	}
+	a.speedMu.Lock()
+	defer a.speedMu.Unlock()
+	a.speedPolicies = make(map[string]*UserSpeedLimitPolicy, len(state.Policies))
+	for i := range state.Policies {
+		p := state.Policies[i]
+		if strings.TrimSpace(p.XrayUserKey) == "" || p.SpeedLimitBps == 0 {
+			continue
+		}
+		policyCopy := p
+		a.speedPolicies[p.XrayUserKey] = &policyCopy
+	}
+	a.speedStates = make(map[string]*UserSpeedLimitState, len(state.States))
+	for key, st := range state.States {
+		stateCopy := st
+		a.speedStates[key] = &stateCopy
+	}
+}
+
+func (a *Agent) saveSpeedLimitStateLocked() {
+	policies := make([]UserSpeedLimitPolicy, 0, len(a.speedPolicies))
+	for _, policy := range a.speedPolicies {
+		if policy == nil || policy.SpeedLimitBps == 0 {
+			continue
+		}
+		policies = append(policies, *policy)
+	}
+	sort.Slice(policies, func(i, j int) bool {
+		return policies[i].XrayUserKey < policies[j].XrayUserKey
+	})
+	states := make(map[string]UserSpeedLimitState, len(a.speedStates))
+	for key, state := range a.speedStates {
+		if state == nil {
+			continue
+		}
+		states[key] = *state
+	}
+	data, err := json.MarshalIndent(speedLimitStateFile{Policies: policies, States: states}, "", "  ")
+	if err != nil {
+		log.Printf("[agent] marshal speed limit state failed: %v", err)
+		return
+	}
+	path := a.speedLimitPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		log.Printf("[agent] create speed limit state dir failed: %v", err)
+		return
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		log.Printf("[agent] write speed limit state failed: %v", err)
+	}
+}
+
+func (a *Agent) speedLimitLoop(ctx context.Context) {
+	interval := a.cfg.SpeedLimitInterval
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.enforceSpeedLimits(ctx)
+		}
+	}
+}
+
+func (a *Agent) enforceSpeedLimits(ctx context.Context) {
+	a.speedMu.Lock()
+	hasPolicies := len(a.speedPolicies) > 0
+	a.speedMu.Unlock()
+	if !hasPolicies {
+		return
+	}
+	stats, err := a.queryXrayStats(ctx)
+	if err != nil {
+		log.Printf("[agent] speed limit stats query failed: %v", err)
+		return
+	}
+	a.enforceSpeedLimitsWithStats(stats, time.Now().UTC())
+}
+
+func (a *Agent) enforceSpeedLimitsWithStats(stats map[string]TrafficItem, now time.Time) {
+	window := a.cfg.SpeedLimitWindow
+	if window <= 0 {
+		window = 10 * time.Second
+	}
+
+	type action struct {
+		policy  UserSpeedLimitPolicy
+		disable bool
+	}
+	actions := make([]action, 0)
+
+	a.speedMu.Lock()
+	for key, policy := range a.speedPolicies {
+		if policy == nil || policy.SpeedLimitBps == 0 {
+			continue
+		}
+		state := a.speedStates[key]
+		if state == nil {
+			state = &UserSpeedLimitState{}
+			a.speedStates[key] = state
+		}
+		stat := stats[key]
+		total := stat.UplinkTotal + stat.DownlinkTotal
+		if policy.Disabled {
+			if !state.ThrottledUntil.IsZero() && now.Before(state.ThrottledUntil) {
+				continue
+			}
+			policy.Disabled = false
+			state.LastTotalBytes = total
+			state.LastCheckedAt = now
+			state.ThrottledUntil = time.Time{}
+			actions = append(actions, action{policy: *policy, disable: false})
+			continue
+		}
+		if state.LastCheckedAt.IsZero() || !now.After(state.LastCheckedAt) || total < state.LastTotalBytes {
+			state.LastTotalBytes = total
+			state.LastCheckedAt = now
+			continue
+		}
+		elapsedSeconds := now.Sub(state.LastCheckedAt).Seconds()
+		if elapsedSeconds <= 0 {
+			continue
+		}
+		deltaBytes := total - state.LastTotalBytes
+		currentBps := uint64(float64(deltaBytes*8) / elapsedSeconds)
+		state.LastTotalBytes = total
+		state.LastCheckedAt = now
+		if currentBps > policy.SpeedLimitBps {
+			policy.Disabled = true
+			state.ThrottledUntil = now.Add(window)
+			actions = append(actions, action{policy: *policy, disable: true})
+		}
+	}
+	a.saveSpeedLimitStateLocked()
+	a.speedMu.Unlock()
+
+	for _, item := range actions {
+		if item.disable {
+			if err := a.removeVLESSClientFromInbound(item.policy.InboundTag, item.policy.XrayUserKey); err != nil {
+				log.Printf("[agent] speed limit disable user %s failed: %v", item.policy.XrayUserKey, err)
+				a.markSpeedPolicyDisabled(item.policy.XrayUserKey, false, time.Time{})
+			} else {
+				log.Printf("[agent] speed limit throttled user %s for %s", item.policy.XrayUserKey, window)
+			}
+			continue
+		}
+		if err := a.addVLESSClientToInbound(item.policy.InboundTag, item.policy.UUID, item.policy.XrayUserKey, item.policy.Flow); err != nil {
+			log.Printf("[agent] speed limit restore user %s failed: %v", item.policy.XrayUserKey, err)
+			a.markSpeedPolicyDisabled(item.policy.XrayUserKey, true, now.Add(window))
+		} else {
+			log.Printf("[agent] speed limit restored user %s", item.policy.XrayUserKey)
+		}
+	}
+}
+
+func (a *Agent) markSpeedPolicyDisabled(xrayUserKey string, disabled bool, until time.Time) {
+	key := strings.TrimSpace(xrayUserKey)
+	if key == "" {
+		return
+	}
+	a.speedMu.Lock()
+	defer a.speedMu.Unlock()
+	policy := a.speedPolicies[key]
+	if policy == nil {
+		return
+	}
+	policy.Disabled = disabled
+	state := a.speedStates[key]
+	if state == nil {
+		state = &UserSpeedLimitState{}
+		a.speedStates[key] = state
+	}
+	if disabled {
+		state.ThrottledUntil = until
+	} else {
+		state.ThrottledUntil = time.Time{}
+	}
+	a.saveSpeedLimitStateLocked()
 }
 
 // addVLESSClient 向 xray-core 配置文件添加 VLESS 用户。
@@ -2444,6 +2760,219 @@ func (a *Agent) ensureXrayProcessRunning() error {
 		return nil
 	}
 	return a.restartXray()
+}
+
+type cpuSample struct {
+	idle  uint64
+	total uint64
+}
+
+// collectRuntimeMetric 采集运行指标；采集失败项保留零值，不能影响心跳。
+func (a *Agent) collectRuntimeMetric() *RuntimeMetric {
+	metric := &RuntimeMetric{
+		ObservedAt:  time.Now().UTC(),
+		XrayRunning: a.isXrayRunning(),
+	}
+	metric.CPUUsagePercent = a.collectCPUUsage()
+	metric.MemoryUsagePercent = collectMemoryUsage()
+	metric.DiskUsagePercent = collectDiskUsage("/")
+	metric.Load1, metric.Load5, metric.Load15 = collectLoadAverage()
+	metric.TCPConnections = collectTCPConnectionCount()
+	metric.XrayUptimeSeconds = collectProcessUptimeSeconds("xray")
+	return metric
+}
+
+func (a *Agent) isXrayRunning() bool {
+	cmd := exec.Command("sh", "-c", "pidof xray >/dev/null 2>&1 || pgrep -f 'xray run' >/dev/null 2>&1")
+	return cmd.Run() == nil
+}
+
+func (a *Agent) collectCPUUsage() float64 {
+	current, ok := readCPUSample()
+	if !ok {
+		return 0
+	}
+	a.cpuMu.Lock()
+	defer a.cpuMu.Unlock()
+	if a.lastCPUStats == nil {
+		a.lastCPUStats = &current
+		return 0
+	}
+	prev := *a.lastCPUStats
+	a.lastCPUStats = &current
+	totalDelta := current.total - prev.total
+	idleDelta := current.idle - prev.idle
+	if totalDelta == 0 || current.total < prev.total || current.idle < prev.idle {
+		return 0
+	}
+	usage := (float64(totalDelta-idleDelta) / float64(totalDelta)) * 100
+	if usage < 0 {
+		return 0
+	}
+	if usage > 100 {
+		return 100
+	}
+	return usage
+}
+
+func readCPUSample() (cpuSample, bool) {
+	data, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return cpuSample{}, false
+	}
+	scanner := strings.SplitN(string(data), "\n", 2)
+	if len(scanner) == 0 {
+		return cpuSample{}, false
+	}
+	fields := strings.Fields(scanner[0])
+	if len(fields) < 5 || fields[0] != "cpu" {
+		return cpuSample{}, false
+	}
+	var values []uint64
+	for _, field := range fields[1:] {
+		value, err := strconv.ParseUint(field, 10, 64)
+		if err != nil {
+			return cpuSample{}, false
+		}
+		values = append(values, value)
+	}
+	var total uint64
+	for _, value := range values {
+		total += value
+	}
+	idle := values[3]
+	if len(values) > 4 {
+		idle += values[4]
+	}
+	return cpuSample{idle: idle, total: total}, true
+}
+
+func collectMemoryUsage() float64 {
+	data, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	var total, available uint64
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		value, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		switch strings.TrimSuffix(fields[0], ":") {
+		case "MemTotal":
+			total = value
+		case "MemAvailable":
+			available = value
+		}
+	}
+	if total == 0 || available > total {
+		return 0
+	}
+	return (float64(total-available) / float64(total)) * 100
+}
+
+func collectDiskUsage(path string) float64 {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return 0
+	}
+	total := stat.Blocks * uint64(stat.Bsize)
+	free := stat.Bavail * uint64(stat.Bsize)
+	if total == 0 || free > total {
+		return 0
+	}
+	return (float64(total-free) / float64(total)) * 100
+}
+
+func collectLoadAverage() (float64, float64, float64) {
+	data, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return 0, 0, 0
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) < 3 {
+		return 0, 0, 0
+	}
+	load1, _ := strconv.ParseFloat(fields[0], 64)
+	load5, _ := strconv.ParseFloat(fields[1], 64)
+	load15, _ := strconv.ParseFloat(fields[2], 64)
+	return load1, load5, load15
+}
+
+func collectTCPConnectionCount() uint32 {
+	count := countProcNetTCP("/proc/net/tcp") + countProcNetTCP("/proc/net/tcp6")
+	if count > int(^uint32(0)) {
+		return ^uint32(0)
+	}
+	return uint32(count)
+}
+
+func countProcNetTCP(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) <= 1 {
+		return 0
+	}
+	return len(lines) - 1
+}
+
+func collectProcessUptimeSeconds(name string) *uint64 {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	uptimeData, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return nil
+	}
+	uptimeFields := strings.Fields(string(uptimeData))
+	if len(uptimeFields) == 0 {
+		return nil
+	}
+	systemUptime, err := strconv.ParseFloat(uptimeFields[0], 64)
+	if err != nil {
+		return nil
+	}
+	ticksPerSecond := float64(100)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		pid := entry.Name()
+		if _, err := strconv.Atoi(pid); err != nil {
+			continue
+		}
+		commData, err := os.ReadFile(filepath.Join("/proc", pid, "comm"))
+		if err != nil || strings.TrimSpace(string(commData)) != name {
+			continue
+		}
+		statData, err := os.ReadFile(filepath.Join("/proc", pid, "stat"))
+		if err != nil {
+			continue
+		}
+		fields := strings.Fields(string(statData))
+		if len(fields) < 22 {
+			continue
+		}
+		startTicks, err := strconv.ParseFloat(fields[21], 64)
+		if err != nil {
+			continue
+		}
+		uptime := systemUptime - startTicks/ticksPerSecond
+		if uptime < 0 {
+			uptime = 0
+		}
+		seconds := uint64(uptime)
+		return &seconds
+	}
+	return nil
 }
 
 // trafficCollectLoop 流量采集循环。

@@ -45,12 +45,16 @@ func main() {
 	refreshRepo := repository.NewRefreshTokenRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	usageLedgerRepo := repository.NewUsageLedgerRepository(db)
+	nodeMetricRepo := repository.NewNodeRuntimeMetricRepository(db)
+	nodeHealthRepo := repository.NewNodeHealthCheckRepository(db)
 
 	// 创建 NodeAccessService（用于创建节点访问任务）
 	nodeAccessSvc := service.NewNodeAccessService(nodeAccessTaskRepo, nodeRepo, planRepo, subRepo, userRepo, cfg)
 
 	// 创建 OrderService（用于订单过期扫描）
 	orderSvc := service.NewOrderService(orderRepo, planRepo)
+	nodeOpsSvc := service.NewNodeOperationsService(nodeRepo, nodeMetricRepo, nodeHealthRepo, usageLedgerRepo)
 
 	// 创建调度器
 	s := scheduler.New()
@@ -93,6 +97,19 @@ func main() {
 		}
 		if count > 0 {
 			log.Printf("[worker] retry_failed_node_tasks requeued %d tasks", count)
+		}
+	})
+
+	// 定时任务：节点健康检查（每分钟）
+	s.AddJob("@every 60s", "check_node_health", func() {
+		ctx := context.Background()
+		count, err := nodeOpsSvc.CheckAllNodes(ctx)
+		if err != nil {
+			log.Printf("[worker] check_node_health error: %v", err)
+			return
+		}
+		if count > 0 {
+			log.Printf("[worker] check_node_health checked %d nodes", count)
 		}
 	})
 

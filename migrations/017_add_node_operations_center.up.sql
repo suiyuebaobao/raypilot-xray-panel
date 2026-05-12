@@ -1,0 +1,41 @@
+CREATE TABLE node_runtime_metrics (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    node_id BIGINT UNSIGNED NULL,
+    node_host_id BIGINT UNSIGNED NULL,
+    cpu_usage_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+    memory_usage_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+    disk_usage_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+    load1 DECIMAL(8,2) NOT NULL DEFAULT 0,
+    load5 DECIMAL(8,2) NOT NULL DEFAULT 0,
+    load15 DECIMAL(8,2) NOT NULL DEFAULT 0,
+    tcp_connections INT UNSIGNED NOT NULL DEFAULT 0,
+    xray_running TINYINT(1) NOT NULL DEFAULT 0,
+    xray_uptime_seconds BIGINT UNSIGNED NULL,
+    observed_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_node_runtime_metrics_node FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_node_runtime_metrics_node_host FOREIGN KEY (node_host_id) REFERENCES node_hosts(id) ON DELETE SET NULL,
+    KEY idx_node_runtime_metrics_node_observed (node_id, observed_at),
+    KEY idx_node_runtime_metrics_host_observed (node_host_id, observed_at),
+    KEY idx_node_runtime_metrics_observed (observed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE node_health_checks (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    node_id BIGINT UNSIGNED NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    health_score INT NOT NULL DEFAULT 0,
+    reason_code VARCHAR(64) NOT NULL,
+    reason_message VARCHAR(255) NOT NULL,
+    tcp_latency_ms INT NULL,
+    tcp_reachable TINYINT(1) NOT NULL DEFAULT 0,
+    heartbeat_ok TINYINT(1) NOT NULL DEFAULT 0,
+    traffic_ok TINYINT(1) NOT NULL DEFAULT 0,
+    load_ok TINYINT(1) NOT NULL DEFAULT 1,
+    checked_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_node_health_checks_node FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE,
+    KEY idx_node_health_checks_node_checked (node_id, checked_at),
+    KEY idx_node_health_checks_status_checked (status, checked_at),
+    KEY idx_node_health_checks_checked (checked_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

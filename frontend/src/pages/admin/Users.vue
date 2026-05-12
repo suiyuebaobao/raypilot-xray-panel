@@ -61,6 +61,9 @@
           <el-tag :type="row.status === 'active' ? 'success' : 'danger'">{{ row.status === 'active' ? '正常' : '禁用' }}</el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="限速" width="110">
+        <template #default="{ row }">{{ speedLimitLabel(row.speed_limit_bps) }}</template>
+      </el-table-column>
       <el-table-column prop="is_admin" label="角色" width="80">
         <template #default="{ row }">{{ row.is_admin ? '管理员' : '用户' }}</template>
       </el-table-column>
@@ -152,6 +155,10 @@
         </el-form-item>
         <el-form-item label="家宽已用(GB)">
           <el-input-number v-model="subForm.residentialUsedTrafficGB" :min="0" :precision="2" />
+        </el-form-item>
+        <el-form-item label="用户限速(Mbps)">
+          <el-input-number v-model="subForm.speedLimitMbps" :min="0" :precision="1" />
+          <span class="form-tip">0 表示不限速，保存后由 node-agent 同步到出口节点。</span>
         </el-form-item>
       </el-form>
 
@@ -353,6 +360,7 @@ const subForm = reactive({
   residentialTrafficLimitGB: 0,
   usedTrafficGB: 0,
   residentialUsedTrafficGB: 0,
+  speedLimitMbps: 0,
 })
 
 const subRules = {
@@ -413,6 +421,12 @@ function formatTrafficLimit(bytes) {
 function formatMultiplier(value) {
   const n = Number(value || 1)
   return `${n.toFixed(3).replace(/\.?0+$/, '')}x`
+}
+
+function speedLimitLabel(value) {
+  const bps = Number(value || 0)
+  if (bps <= 0) return '不限速'
+  return `${(bps / 1000 / 1000).toFixed(1).replace(/\.0$/, '')} Mbps`
 }
 
 function billedTotal(row) {
@@ -477,6 +491,14 @@ function bytesToGB(bytes) {
 
 function gbToBytes(gb) {
   return Math.round(Number(gb || 0) * 1024 * 1024 * 1024)
+}
+
+function mbpsToBps(mbps) {
+  return Math.round(Number(mbps || 0) * 1000 * 1000)
+}
+
+function bpsToMbps(bps) {
+  return Math.round((Number(bps || 0) / 1000 / 1000) * 10) / 10
 }
 
 function defaultExpireDate() {
@@ -653,6 +675,7 @@ async function handleSubscription(row) {
   subForm.residentialTrafficLimitGB = bytesToGB(plans.value[0]?.residential_traffic_limit || 0)
   subForm.usedTrafficGB = 0
   subForm.residentialUsedTrafficGB = 0
+  subForm.speedLimitMbps = 0
   subDialogVisible.value = true
   subLoading.value = true
   try {
@@ -667,6 +690,7 @@ async function handleSubscription(row) {
       subForm.residentialTrafficLimitGB = bytesToGB(currentSubscription.value.residential_traffic_limit)
       subForm.usedTrafficGB = bytesToGB(currentSubscription.value.used_traffic)
       subForm.residentialUsedTrafficGB = bytesToGB(currentSubscription.value.residential_used_traffic)
+      subForm.speedLimitMbps = bpsToMbps(currentSubscription.value.speed_limit_bps)
     }
   } catch (err) {
     ElMessage.error(err.message || '获取订阅失败')
@@ -705,6 +729,7 @@ async function saveSubscription() {
       used_traffic: gbToBytes(subForm.usedTrafficGB),
       residential_traffic_limit: gbToBytes(subForm.residentialTrafficLimitGB),
       residential_used_traffic: gbToBytes(subForm.residentialUsedTrafficGB),
+      speed_limit_bps: mbpsToBps(subForm.speedLimitMbps),
     })
     currentSubscription.value = res.data.subscription
     subTokens.value = normalizeSubscriptionTokens(res.data.tokens)
@@ -818,6 +843,11 @@ onMounted(() => {
 .admin-table-scroll {
   width: 100%;
   overflow-x: auto;
+}
+.form-tip {
+  margin-left: 10px;
+  color: #909399;
+  font-size: 12px;
 }
 .user-plan-cell {
   display: flex;
