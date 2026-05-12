@@ -248,10 +248,18 @@ func nodeTrafficOK(node model.Node, now time.Time) bool {
 	if node.TrafficErrorCount > 0 || node.LastTrafficErrorAt != nil {
 		return false
 	}
-	if node.LastTrafficSuccessAt == nil {
+	latest := latestTrafficReportAt(node)
+	if latest == nil {
 		return true
 	}
-	return now.Sub(*node.LastTrafficSuccessAt) <= nodeTrafficStaleAfter
+	return now.Sub(*latest) <= nodeTrafficStaleAfter
+}
+
+func latestTrafficReportAt(node model.Node) *time.Time {
+	if node.LastTrafficReportAt != nil {
+		return node.LastTrafficReportAt
+	}
+	return node.LastTrafficSuccessAt
 }
 
 func nodeLoadOK(metric model.NodeRuntimeMetric, hasMetric bool, now time.Time) bool {
@@ -288,7 +296,7 @@ func classifyNodeHealthReason(
 		if node.TrafficErrorCount > 0 || node.LastTrafficErrorAt != nil {
 			return "traffic_report_error", "最近一次流量上报处理失败"
 		}
-		return "traffic_report_stale", "节点流量上报成功时间过旧"
+		return "traffic_report_stale", "节点流量上报到达中心时间过旧"
 	}
 	if !loadOK {
 		return "node_overloaded", "节点 CPU、内存、磁盘或负载超过阈值"
@@ -484,6 +492,9 @@ func nodeHealthText(status string) string {
 func trafficStatusText(node model.Node) string {
 	if node.TrafficErrorCount > 0 || node.LastTrafficErrorAt != nil {
 		return "流量上报异常"
+	}
+	if node.LastTrafficReportAt != nil {
+		return "流量上报正常"
 	}
 	if node.LastTrafficSuccessAt == nil {
 		return "暂无成功上报"

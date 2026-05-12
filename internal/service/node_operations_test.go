@@ -96,6 +96,42 @@ func TestNodeOperations_BuildHealthCheckAgentOffline(t *testing.T) {
 	assert.Equal(t, "agent_offline", check.ReasonCode)
 }
 
+func TestNodeOperations_BuildHealthCheckRecentReportWithOldSuccessIsHealthy(t *testing.T) {
+	_, svc := setupNodeOperationsTest(t)
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	svc.SetNowForTest(func() time.Time { return now })
+	svc.SetTCPProbeForTest(func(ctx context.Context, node model.Node) (bool, *int) {
+		latency := 20
+		return true, &latency
+	})
+	heartbeatAt := now.Add(-10 * time.Second)
+	reportAt := now.Add(-30 * time.Second)
+	successAt := now.Add(-2 * time.Hour)
+
+	check := svc.BuildHealthCheck(context.Background(), model.Node{
+		ID:                   4,
+		Host:                 "example.com",
+		Port:                 443,
+		LastHeartbeatAt:      &heartbeatAt,
+		LastTrafficReportAt:  &reportAt,
+		LastTrafficSuccessAt: &successAt,
+		IsEnabled:            true,
+	}, model.NodeRuntimeMetric{
+		NodeID:             uint64Ptr(4),
+		CPUUsagePercent:    10,
+		MemoryUsagePercent: 20,
+		DiskUsagePercent:   30,
+		Load1:              1,
+		XrayRunning:        true,
+		ObservedAt:         now.Add(-10 * time.Second),
+	}, true)
+
+	assert.Equal(t, model.NodeHealthHealthy, check.Status)
+	assert.Equal(t, 100, check.HealthScore)
+	assert.Equal(t, "healthy", check.ReasonCode)
+	assert.True(t, check.TrafficOK)
+}
+
 func TestNodeOperations_BuildHealthCheckServerUnreachable(t *testing.T) {
 	_, svc := setupNodeOperationsTest(t)
 	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)

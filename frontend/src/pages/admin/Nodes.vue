@@ -118,7 +118,7 @@
             <el-tag size="small" type="info" effect="plain">线路 {{ row.nodes.length }}</el-tag>
           </div>
           <div v-if="row.used_ports.length" class="server-used-ports">
-            <span>端口</span>
+            <span>实际监听端口</span>
             <el-tag v-for="item in row.used_ports" :key="item.key" size="small" effect="plain">
               {{ item.listen_ip }}:{{ item.port }} {{ transportLabel(item.transport) }}
             </el-tag>
@@ -138,8 +138,9 @@
           <div class="traffic-sync-cell">
             <div>
               <el-tag size="small" :type="trafficSyncTag(row)">{{ trafficSyncLabel(row) }}</el-tag>
-              <span class="traffic-sync-time">{{ row.last_traffic_success_at ? formatDate(row.last_traffic_success_at) : '未成功' }}</span>
             </div>
+            <small class="traffic-sync-time">最近上报：{{ row.last_traffic_report_at ? formatDate(row.last_traffic_report_at) : '未上报' }}</small>
+            <small class="traffic-sync-time">最近入账：{{ row.last_traffic_success_at ? formatDate(row.last_traffic_success_at) : '暂无' }}</small>
             <small v-if="row.last_traffic_error" class="traffic-sync-error">{{ row.last_traffic_error }}</small>
           </div>
         </template>
@@ -462,7 +463,7 @@
           </div>
         </div>
         <div v-if="activeServerUsedPorts.length" class="used-port-panel">
-          <span>已用端口</span>
+          <span>实际监听端口</span>
           <div class="used-port-list">
             <el-tag v-for="item in activeServerUsedPorts" :key="item.key" size="small" effect="plain">
               {{ item.listen_ip }}:{{ item.port }} {{ transportLabel(item.transport) }} · {{ item.name }}
@@ -959,13 +960,13 @@ function handleTransportSelectionChange(target) {
 
 function trafficSyncTag(row) {
   if (row.last_traffic_error) return 'danger'
-  if (row.last_traffic_success_at) return 'success'
+  if (row.last_traffic_report_at || row.last_traffic_success_at) return 'success'
   return 'info'
 }
 
 function trafficSyncLabel(row) {
   if (row.last_traffic_error) return `异常 ${row.traffic_error_count || 1} 次`
-  if (row.last_traffic_success_at) return '正常'
+  if (row.last_traffic_report_at || row.last_traffic_success_at) return '正常'
   return '未上报'
 }
 

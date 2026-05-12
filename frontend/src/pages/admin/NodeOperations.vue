@@ -76,7 +76,8 @@
             <template #default="{ row }">
               <div class="node-name">
                 <strong>{{ row.node.name }}</strong>
-                <small>#{{ row.node.id }} · {{ row.node.host }}:{{ row.node.port }}</small>
+                <small>#{{ row.node.id }} · {{ transportLabel(row.node.transport) }} · 入口 {{ row.node.host }}:{{ row.node.port }}</small>
+                <small>监听 {{ listenEndpoint(row.node) }}</small>
               </div>
             </template>
           </el-table-column>
@@ -106,7 +107,8 @@
             <template #default="{ row }">
               <div class="traffic-cell">
                 <el-tag size="small" :type="row.health?.traffic_ok ? 'success' : 'warning'" effect="plain">{{ row.traffic_text }}</el-tag>
-                <small>{{ row.node.last_traffic_success_at ? formatDate(row.node.last_traffic_success_at) : '暂无成功上报' }}</small>
+                <small>最近上报：{{ row.node.last_traffic_report_at ? formatDate(row.node.last_traffic_report_at) : '暂无' }}</small>
+                <small>最近入账：{{ row.node.last_traffic_success_at ? formatDate(row.node.last_traffic_success_at) : '暂无' }}</small>
               </div>
             </template>
           </el-table-column>
@@ -203,6 +205,15 @@ function statusTag(status) {
 
 function poolLabel(pool) {
   return pool === 'residential' ? '家宽' : '普通'
+}
+
+function transportLabel(transport) {
+  return transport === 'xhttp' ? 'XHTTP' : 'TCP'
+}
+
+function listenEndpoint(node) {
+  const listenIP = node?.listen_ip || node?.host || '0.0.0.0'
+  return `${listenIP}:${node?.port || '-'}`
 }
 
 function formatDate(value) {
